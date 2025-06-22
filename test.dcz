@@ -1,0 +1,3 @@
+char* a = "hello world";
+suu b = 1;
+suu empty;

@@ -1,0 +1,126 @@
+
+#![allow(dead_code)]
+
+#[derive(Debug, PartialEq, Clone, PartialOrd)]
+pub enum Value {
+    Null,
+    Number(i64),
+    Float(f64),
+    Str(String),
+    Object(String),
+}
+
+impl std::ops::Add for Value {
+    type Output = Value;
+    fn add(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            Value::Number(self.to_literal()+rhs.to_literal())
+        } else if matches!(self, Value::Str(_)) && matches!(rhs, Value::Str(_)) {
+            Value::Str(format!("{}{}", self.to_string(),rhs.to_string()))
+        } else {
+            Value::Null
+        }
+    }
+}
+
+impl std::ops::Neg for Value {
+    type Output = Value;
+    fn neg(self) -> Self::Output {
+        if matches!(self, Value::Number(_)) {
+            Value::Number(-self.to_literal())
+        } else {
+            panic!("[NEG]: rhs MUST be integer or float.");
+        }
+    }
+}
+
+impl std::ops::Sub for Value {
+    type Output = Value;
+    fn sub(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            Value::Number(self.to_literal()-rhs.to_literal())
+        }
+        else {
+            panic!("[SUB] Both value MUST Be integer or float.");
+        }
+    }
+}
+
+impl std::ops::Mul for Value {
+    type Output = Value;
+    fn mul(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            Value::Number(self.to_literal()*rhs.to_literal())
+        }
+        else {
+            panic!("[MUL] Both value MUST Be integer or float.");
+        }
+    }
+}
+
+impl std::ops::Not for Value {
+    type Output = Value;
+    fn not(self) -> Self::Output {
+        if matches!(self, Value::Str(_)) {
+            Value::Number(1)
+        } else if matches!(self, Value::Number(_)) {
+            Value::Number(!self.to_literal())
+        } else {
+            unimplemented!()
+        }
+    }
+}
+
+impl std::ops::Div for Value {
+    type Output = Value;
+    fn div(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            if self.clone().to_literal() == 0 || rhs.clone().to_literal() == 0 {
+                panic!("[DIV] Division by 0");
+            }
+            Value::Number(self.to_literal()/rhs.to_literal())
+        }
+        else {
+            panic!("[DIV] Both value MUST Be integer or float.");
+        }
+    }
+}
+
+impl Value {
+    pub fn new_obj(obj_name: String) -> Self {
+        Self::Object(obj_name)
+    }
+    pub fn new(string: String) -> Self {
+        // convert string to specified value
+        let strtrim = string.trim();
+        if strtrim.parse::<i64>().is_ok() {
+            Self::Number(strtrim.parse::<i64>().unwrap())
+        } else if strtrim.parse::<f64>().is_ok() {
+             Self::Float(strtrim.parse::<f64>().unwrap())
+        } else {
+            if strtrim.len() == 0 {
+                Self::Null
+            } else {
+                Self::Str(strtrim.to_string())
+            }
+        }
+    }
+    
+    pub fn to_literal(self) -> i64 {
+        *self.value().expect("value").downcast_ref::<i64>().unwrap()
+    }
+
+    pub fn to_string(self) -> String {
+        self.value().expect("null value").downcast_ref::<String>().unwrap().clone()
+    }
+
+    pub fn value(&self) -> Option<Box<dyn std::any::Any>> {
+        match self {
+            Value::Null => None,
+            Value::Number(number) => Some(Box::new(number.clone())),
+            Value::Float(float) => Some(Box::new(float.clone())),
+            Value::Str(string) => Some(Box::new(string[1..string.len()-1].to_string())),
+            Value::Object(obj) => Some(Box::new(obj.clone()))
+        }
+    }
+}
