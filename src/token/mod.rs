@@ -225,7 +225,8 @@ impl Token {
                         "else",
                         "while",
                         "for",
-                        "let"
+                        "let",
+                        "extern"
                     ];
 
                     let data_type_kw = vec![
@@ -242,10 +243,10 @@ impl Token {
 
                     let str_text = &self.code[self.start..self.current];
 
-                    if kw.iter().any(|f| f.contains(str_text)) {
+                    if kw.iter().any(|f| *f==str_text) {
                         //self.add_symbol(TokenType::Keywords);
                         self.add_obj_token(TokenType::Keywords, str_text.to_string());
-                    } else if data_type_kw.iter().any(|f| f.contains(str_text))  {
+                    } else if data_type_kw.iter().any(|f| *f==str_text)  {
                         self.add_obj_token(TokenType::DataType, str_text.to_string());
                     } else {
                         //self.add_symbol(TokenType::Identifier);

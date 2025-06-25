@@ -96,7 +96,7 @@ impl AST {
             return Box::new(Expr::None);
         }
 
-        panic!("Expect Expression at {}:{}", self.peek().line, self.peek().end);
+        panic!("Expect Expression at {}:{} ({:?})", self.peek().line, self.peek().end, self.peek().tok_type);
     }
 
     fn unary(&mut self) -> Box<Expr> {
@@ -122,7 +122,15 @@ impl AST {
     }
 
     fn statement(&mut self) -> Box<Expr> {
-        let expr = self.expr();
+        self.clear_newline();
+        if self.match_token(&mut vec![TokenType::LeftBrace]) {
+            return self.block();
+        }
+        if self.peek().identifier == "if" {
+            self.advance();
+            return self.if_stmt();
+        }
+        let expr = self.var_decl();
         if ! matches!(*expr, Expr::None) {
             self.consume(TokenType::Semicolon, "Expect semicolon");
             Box::new(
@@ -134,13 +142,57 @@ impl AST {
     }
 
 
+    fn if_stmt(&mut self) -> Box<Expr> {
+        let condition = self.expr();
+        let then_block = self.statement();
+        let mut else_block = Box::new(Expr::None);
+        if self.peek().identifier == "else" {
+            self.advance();
+            else_block = self.statement();
+        }
+        Box::new(
+            Expr::IfStmt(condition, then_block, else_block)
+            )
+    }
+
+    fn block(&mut self) -> Box<Expr> {
+        /*
+         * {
+         *  int a = 0;
+         *
+         * }
+         * */
+
+        let mut block = Vec::new();
+        while ! self.check(TokenType::RightBrace) && !self.is_eof() {
+            if self.check(TokenType::NewLine) {
+                self.advance();
+                continue;
+            }
+            let st = *self.statement();
+            block.push(st);
+        }
+        self.consume(TokenType::RightBrace, "Expect '}' after block declare");
+        Box::new(
+            Expr::Block(block)
+        )
+    }
+
+    fn clear_newline(&mut self) {
+        while self.check(TokenType::NewLine) {
+            self.advance();
+        }
+    }
+
+
     fn var_decl(&mut self) -> Box<Expr> {
         // char* a = "hello world";
         
         //check if current token is not data type
-        
+        self.clear_newline();
+
         if self.peek().tok_type != TokenType::DataType {
-            return self.statement();
+            return self.expr();
         }
         let data_type = self.primary().to_datatype().expect("VarDecl");
         let is_pointer = self.match_token(&mut vec![TokenType::Star]);
@@ -155,9 +207,6 @@ impl AST {
         if self.match_token(&mut vec![TokenType::Equal]) {
             init = Some(self.expr());
         }
-
-        self.consume(TokenType::Semicolon, "Expect ';'");
-
         Box::new(
             Expr::VarDecl(data_type, is_pointer, name.ident_to_string(), init)
             )
@@ -178,7 +227,8 @@ impl AST {
                 expr_vec.push(Expr::Macro(macro_name, vect));
             }
             else {
-                let expr = *self.var_decl();
+                self.clear_newline();
+                let expr = *self.statement();
                 match expr {
                     Expr::None => {}
                     _ => expr_vec.push(expr)

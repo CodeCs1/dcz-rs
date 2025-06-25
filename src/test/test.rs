@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod test {
-    use crate::{codegen::ir::{Args, BasicBlock, IrBuilder}, token::{token_type::TokenType, Token, TokenData}, Value::Value};
-    use std::sync::Arc;
+    use crate::{codegen::{ir::IrBuilder, ir_opcode::*}, token::{token_type::TokenType, Token, TokenData}, Value::Value};
 
     #[test]
     fn tokenizer_test_simple() {
@@ -124,23 +123,9 @@ mod test {
     }
 
     #[test]
-    fn ir_syscall_test() {
-        //#!syscall 60 0
-        //
-        // IR:
-        //  syscall_1:
-        //     arg0 60
-        //     arg1 0
-        
-        let basicblock1 = IrBuilder::new().args(Args{
-            idx: 0,
-            is_write: true,value: Arc::new(60)
-        }).args(Args { idx: 1, is_write: true, value: Arc::new(0) });
-
-        let irb = IrBuilder::new().block(
-            BasicBlock { name: "syscall_1".to_string(), body: basicblock1.build() }
-            ).build();
-
-        dbg!(irb.instr);
+    fn ir_test1() {
+        let irb1 = IrBuilder::new().constant(Constant { idx: 0 }).ret().build();
+        dbg!(&irb1);
+        assert_eq!(irb1.to_string(), "load_const(0)\nret")
     }
 }

@@ -1,85 +1,95 @@
 /*dcz IR*/
 
-use std::{fmt::Debug, sync::Arc};
 
-pub trait Opcode {
-    fn to_string(&self) -> String;
-}
-
-impl Debug for dyn Opcode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.to_string())
-    }
-}
-
-pub struct Args {
-    pub idx: u128,
-    pub is_write: bool,
-    pub value: Arc<dyn std::any::Any>
-}
-impl Opcode for Args {
-    fn to_string(&self) -> String {
-        match self.is_write {
-            true => {
-                format!("arg{} {}", self.idx, *self.value.downcast_ref::<i32>().expect("Null"))
-            },
-            false => {
-                format!("arg{}", self.idx)
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct BasicBlock {
-    pub name: String,
-    pub body: Ir
-}
-
-impl Opcode for BasicBlock {
-    fn to_string(&self) -> String {
-        let mut ir_code = String::new();
-        ir_code.push_str( format!("{}:\n", self.name).as_str() );
-
-        self.body.instr.iter().for_each(|opcode_instr| {
-            ir_code.push('\t');
-            ir_code.push_str(opcode_instr.to_string().as_str());
-            ir_code.push('\n');
-        });
-        
-        ir_code
-    }
-}
+use crate::Value::Value;
+use super::ir_opcode::*;
 
 #[derive(Debug)]
 pub struct Ir {
-    pub instr: Vec<Arc<dyn Opcode>>
+    pub instr: Vec<Opcode>
 }
 
+impl std::fmt::Display for Ir {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s =self.instr.iter().map(|opcode| format!("{}\n",opcode.to_string())).collect::<String>();
+        s.pop();
+        write!(f, "{}", s)
+    }
+}
+
+#[derive(Clone)]
 pub struct IrBuilder {
-    instr: Vec<Arc<dyn Opcode>>,
+    instr: Vec<Opcode>,
+    c_pool: ConstantPool,
 }
 
 
 impl IrBuilder {
     pub fn new() -> Self {
-        Self { instr: Vec::new() }
+        Self { instr: Vec::new(), c_pool: ConstantPool::new() }
     }
-    pub fn args(mut self, vargs: Args) -> Self {
+    pub fn args(mut self, idx: u128, is_write: bool, v: Value) -> Self {
         self.instr.push(
-            Arc::new(
-                vargs
-                )
+            Opcode::Args(idx, is_write, v)
             );
         self
     }
 
-    pub fn block(mut self, block: BasicBlock) -> Self {
-        self.instr.push(Arc::new(block));
+    pub fn ret(mut self) -> Self {
+        self.instr.push(Opcode::Return);
         self
     }
 
+    pub fn constant(mut self, v: Value) -> Self {
+        self.c_pool.append(v);
+        self
+    }
+
+    pub fn load_constant(mut self, idx: usize) -> Self {
+        self.instr.push(Opcode::LoadConstant(idx));
+        self
+    }
+
+    pub fn get_const_pool(&self) -> ConstantPool {
+        self.c_pool.clone()
+    }
+
+    pub fn append_from(mut self, op: Opcode) -> Self {
+        self.instr.push(op);
+        self
+    }
+
+    pub fn append_from_vec(mut self, v: &mut Vec<Opcode>) -> Self {
+        for x in v {
+            match x {
+                Opcode::Constant(v)=> {
+                    if v.value().expect("null value").is::<String>() {
+                        self.c_pool.append(v.clone());
+                    } else {
+                        self.instr.push(x.clone());
+                    }
+                }
+                _ => {
+                    self.instr.push(x.clone());
+                }
+            }
+        }
+        self
+    }
+
+
     pub fn build(self) -> Ir {
         Ir { instr: self.instr }
+    }
+}
+
+impl FromIterator<Opcode> for IrBuilder {
+    fn from_iter<T: IntoIterator<Item = Opcode>>(iter: T) -> Self {
+        let mut irb = Self::new();
+
+        for x in iter {
+            irb=irb.append_from(x);
+        }
+        irb
     }
 }

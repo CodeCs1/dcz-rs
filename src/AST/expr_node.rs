@@ -23,6 +23,9 @@ pub enum Expr {
     Macro(String,Vec<Expr>),
     Identifier(String),
     Statement(Box<Expr>),
+    Block(Vec<Expr>),
+
+    IfStmt(Box<Expr>, Box<Expr>, Box<Expr>),
 
     /// Var declare Statement VarDecl(dt, is_pointer, name, initializer)
     VarDecl(DataType, bool,  String, Option<Box<Expr>>),

@@ -1,3 +1,7 @@
-char* a = "hello world";
-suu b = 1;
-suu empty;
+# extern putc(char);
+
+if (3 == 4) {
+	int a = 0;
+} else {
+	int b = 0;
+}

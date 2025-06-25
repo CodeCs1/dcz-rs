@@ -1,13 +1,13 @@
 #![allow(non_snake_case)]
 
-use std::{fs::File, io::Read, iter::zip};
+use std::{fs::File, io::Read/*, iter::zip*/};
 use clap::Parser;
-use codegen::Codegen;
+//use codegen::codegen::Codegen;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
 
 
-use object_out::ObjectOut;
+//use object_out::ObjectOut;
 
 mod object_out;
 mod AST;
@@ -16,11 +16,21 @@ mod DataSection;
 mod Value;
 mod test;
 mod codegen;
+mod VM;
+
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Cmd {
-    file: String
+    file: String,
+
+    #[arg(short, long, default_value_t=true)]
+    /// Run speficied script.
+    run: bool,
+
+    #[arg(short, long, default_value_t='0')]
+    ///Optimization flags
+    Optimization: char
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>>{
@@ -37,7 +47,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
     let _ = Checker::new(&ast_tree).check()?;
 
-    
+    let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(ast_tree);
+
+    let opcode_list = ast2ir.to_ir();
+
+    if args.run {
+        use VM::vm;
+        vm::VM::new(ast2ir.const_pool.clone(),opcode_list).run().expect("VMError");
+    }
 
     /*
     let mut code_gen = Codegen::new(ast_tree);

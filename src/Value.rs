@@ -5,7 +5,8 @@
 pub enum Value {
     Null,
     Number(i64),
-    Float(f64),
+    Float(f32),
+    Double(f64),
     Str(String),
     Object(String),
 }
@@ -17,7 +18,10 @@ impl std::ops::Add for Value {
             Value::Number(self.to_literal()+rhs.to_literal())
         } else if matches!(self, Value::Str(_)) && matches!(rhs, Value::Str(_)) {
             Value::Str(format!("{}{}", self.to_string(),rhs.to_string()))
-        } else {
+        } else if matches!(self, Value::Float(_)) || matches!(rhs, Value::Float(_)) {
+            Value::Float(self.to_float()+rhs.to_float())
+        }
+        else {
             Value::Null
         }
     }
@@ -61,12 +65,16 @@ impl std::ops::Mul for Value {
 impl std::ops::Not for Value {
     type Output = Value;
     fn not(self) -> Self::Output {
-        if matches!(self, Value::Str(_)) {
-            Value::Number(1)
-        } else if matches!(self, Value::Number(_)) {
-            Value::Number(!self.to_literal())
+        if matches!(self, Value::Number(_)) {
+            if self.clone().to_literal() == 0 {
+                Value::Number(1)
+            } else if self.clone().to_literal() == 1 {
+                Value::Number(0)
+            } else {
+                Value::Number(!self.to_literal())
+            }
         } else {
-            unimplemented!()
+            panic!("[NOT] It can only apply to i64, not string nor float.");
         }
     }
 }
@@ -95,9 +103,12 @@ impl Value {
         let strtrim = string.trim();
         if strtrim.parse::<i64>().is_ok() {
             Self::Number(strtrim.parse::<i64>().unwrap())
+        } else if strtrim.parse::<f32>().is_ok() {
+            Self::Float(strtrim.parse::<f32>().unwrap())
         } else if strtrim.parse::<f64>().is_ok() {
-             Self::Float(strtrim.parse::<f64>().unwrap())
-        } else {
+            Self::Double(strtrim.parse::<f64>().unwrap())
+        }
+        else {
             if strtrim.len() == 0 {
                 Self::Null
             } else {
@@ -110,6 +121,14 @@ impl Value {
         *self.value().expect("value").downcast_ref::<i64>().unwrap()
     }
 
+    pub fn to_float(self) -> f32 {
+        *self.value().expect("null value").downcast_ref::<f32>().unwrap()
+    }
+
+    pub fn to_double(self) -> f64 {
+        *self.value().expect("null value").downcast_ref::<f64>().unwrap()
+    }
+
     pub fn to_string(self) -> String {
         self.value().expect("null value").downcast_ref::<String>().unwrap().clone()
     }
@@ -119,6 +138,7 @@ impl Value {
             Value::Null => None,
             Value::Number(number) => Some(Box::new(number.clone())),
             Value::Float(float) => Some(Box::new(float.clone())),
+            Value::Double(double) => Some(Box::new(double.clone())),
             Value::Str(string) => Some(Box::new(string[1..string.len()-1].to_string())),
             Value::Object(obj) => Some(Box::new(obj.clone()))
         }
