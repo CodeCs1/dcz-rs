@@ -9,6 +9,7 @@ pub enum Value {
     Double(f64),
     Str(String),
     Object(String),
+    Boolean(bool)
 }
 
 impl std::ops::Add for Value {
@@ -107,8 +108,9 @@ impl Value {
             Self::Float(strtrim.parse::<f32>().unwrap())
         } else if strtrim.parse::<f64>().is_ok() {
             Self::Double(strtrim.parse::<f64>().unwrap())
-        }
-        else {
+        } else if strtrim.parse::<bool>().is_ok() {
+            Self::Boolean(strtrim.parse::<bool>().unwrap())
+        } else {
             if strtrim.len() == 0 {
                 Self::Null
             } else {
@@ -140,7 +142,8 @@ impl Value {
             Value::Float(float) => Some(Box::new(float.clone())),
             Value::Double(double) => Some(Box::new(double.clone())),
             Value::Str(string) => Some(Box::new(string[1..string.len()-1].to_string())),
-            Value::Object(obj) => Some(Box::new(obj.clone()))
+            Value::Object(obj) => Some(Box::new(obj.clone())),
+            Value::Boolean(b) => Some(Box::new(b.clone()))
         }
     }
 }

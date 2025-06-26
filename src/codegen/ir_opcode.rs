@@ -39,8 +39,23 @@ pub enum Opcode {
     ClearLocal,
     /// BEGIN
     Begin,
+    /// CMPLT
+    CmpLT,
+    /// CMPLE
+    CmpLE,
+    /// CMPGT
+    CmpGT,
+    /// CMPGE
+    CmpGE,
+    /// CMPEQ
+    CmpEQ,
+    /// JMP(offset)
+    Jmp(usize),
+    /// JIFFALSE(offset)
+    JIfFalse(usize),
+
     /// NOP
-    Nop
+    Nop,
 }
 
 impl Debug for Opcode {
@@ -70,6 +85,11 @@ impl Debug for Opcode {
             Opcode::Div => write!(f, "[DIV (lhs / rhs)]"),
             Opcode::Shl => write!(f, "[SHL (lhs << rhs)]"),
             Opcode::Shr => write!(f, "[SHR (lhs >> rhs)]"),
+            Opcode::CmpLT => write!(f, "[CMPLT (lhs < rhs)]"),
+            Opcode::CmpLE => write!(f, "[CMPLE (lhs <= rhs)]"),
+            Opcode::CmpGT => write!(f, "[CMPGT (lhs > rhs)]"),
+            Opcode::CmpGE => write!(f, "[CMPGE (lhs >= rhs)]"),
+            Opcode::CmpEQ => write!(f, "[CMPEQ (lhs == rhs)]"),
             Opcode::Not => write!(f, "[NOT (rhs)]"),
             Opcode::Neg => write!(f, "[NEG (rhs)]"),
             Opcode::Nop => write!(f,"[NOP]"),
@@ -77,7 +97,9 @@ impl Debug for Opcode {
             Opcode::StoreName(s) => write!(f, "[STORE_NAME ({})]", s),
             Opcode::StoreLocal(s) => write!(f, "[STORE_LOCAL ({})]", s),
             Opcode::ClearLocal => write!(f, "[CLEAR_LOCAL]"),
-            Opcode::Begin => write!(f, "[BEGIN]")
+            Opcode::Begin => write!(f, "[BEGIN]"),
+            Opcode::Jmp(offset) => write!(f, "[JMP ({})]", offset),
+            Opcode::JIfFalse(offset) => write!(f, "[JIFFALSE ({})]", offset)
         }
     }
 }

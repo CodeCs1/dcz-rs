@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicBool, Arc};
+use std::sync::{atomic::{AtomicBool, AtomicUsize}, Arc};
 
 use crate::AST::expr_node::Expr;
 
@@ -30,6 +30,13 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
                 crate::token::token_type::TokenType::Minus => Opcode::Sub,
                 crate::token::token_type::TokenType::Star => Opcode::Mul,
                 crate::token::token_type::TokenType::Slash => Opcode::Div,
+                crate::token::token_type::TokenType::Less => Opcode::CmpLT,
+                crate::token::token_type::TokenType::LessEqual => Opcode::CmpLE,
+                crate::token::token_type::TokenType::Greater => Opcode::CmpGT,
+                crate::token::token_type::TokenType::GreaterEqual => Opcode::CmpGE,
+                crate::token::token_type::TokenType::EqualEqual => Opcode::CmpEQ,
+                crate::token::token_type::TokenType::ShiftLeft => Opcode::Shl,
+                crate::token::token_type::TokenType::ShiftRight => Opcode::Shr,
                 _ => unimplemented!()
             });
             v
@@ -62,6 +69,19 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             IN_BLOCK.store(false, std::sync::atomic::Ordering::SeqCst);
 
             v.push(Opcode::ClearLocal);
+            v
+        }
+        Expr::IfStmt(cond,then , elsecase) => {
+            let mut v = Vec::from(visit_expr(*cond));
+            let mut then_v = visit_expr(*then);
+            let mut else_v = Vec::new();
+            if !matches!(*elsecase, Expr::None) {
+                else_v.append(&mut visit_expr(*elsecase));
+                then_v.push(Opcode::Jmp(else_v.len()));
+            }
+            v.push(Opcode::JIfFalse(then_v.len()));
+            v.append(&mut then_v);
+            v.append(&mut else_v);
             v
         }
         Expr::Unary(op, rhs) => {

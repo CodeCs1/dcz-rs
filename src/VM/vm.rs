@@ -47,7 +47,6 @@ impl VM {
                     let tmp1 = self.stack.pop().unwrap();
                     let tmp2 = self.stack.pop().unwrap();
                     self.stack.push(tmp1+tmp2);
-                    dbg!(&self.stack);
                 }
                 Opcode::StoreLocal(s) => {
                     let tmp1 = self.stack.pop().unwrap();
@@ -56,6 +55,7 @@ impl VM {
                     self.local_stack[len-1].push(s.clone());
                 }
                 Opcode::ClearLocal => {
+
                     self.local_stack.last().unwrap().iter().for_each(|f| {
                         self.variable_stack.remove(f);
                     });
@@ -94,6 +94,20 @@ impl VM {
                     let tmp1 = self.stack.pop().unwrap();
                     let tmp2 = self.stack.pop().unwrap();
                     self.stack.push(tmp1/tmp2);
+                }
+                Opcode::CmpLT => {
+                    let tmp1 = self.stack.pop().unwrap();
+                    let tmp2 = self.stack.pop().unwrap();
+                    self.stack.push(Value::Boolean(tmp2 < tmp1));
+                }
+                Opcode::JIfFalse(offset) => {
+                    let curr = self.stack.pop().unwrap();
+                    if curr == Value::Boolean(false) {
+                        self.ip += offset;
+                    }
+                }
+                Opcode::Jmp(offset) => {
+                    self.ip += offset;
                 }
                 Opcode::Neg => {
                     let tmp1 = self.stack.pop().unwrap();
