@@ -1,13 +1,14 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{codegen::{ir::Ir, ir_opcode::*}, Value::Value};
+use crate::{codegen::ir_opcode::*, Value::Value};
+
+use super::stack::Stack;
 
 pub struct VM {
     c_pool: ConstantPool,
-    opcode: Ir,
-    stack: Vec<Value>,
+    stack: Vec<Stack>,
     ip: usize,
-    variable_stack: HashMap<String, Value>,
+    variable_stack: HashMap<String, Stack>,
     local_stack: Vec<Vec<String>>
 }
 
@@ -25,15 +26,15 @@ impl Debug for VMError {
     }
 }
 impl VM {
-    pub fn new(c_pool: ConstantPool, opcode: Ir) -> Self {
-        Self { c_pool: c_pool, ip: 0, opcode: opcode, stack: Vec::new(), variable_stack: HashMap::new(), local_stack: Vec::new() }
+    pub fn new(c_pool: ConstantPool) -> Self {
+        Self { c_pool: c_pool, ip: 0, stack: Vec::new(), variable_stack: HashMap::new(), local_stack: Vec::new() }
     }
 
-    pub fn run(&mut self) -> Result<(), VMError> {
-        dbg!(&self.opcode.instr);
+    pub fn run(&mut self, opcodes: Vec<Opcode>) -> Result<(), VMError> {
+        dbg!(&opcodes);
         let mut result = Result::Ok(());
 
-        let opcode_vec = &self.opcode.instr;
+        let opcode_vec = &opcodes;
 
         while self.ip < opcode_vec.len() {
             let op = &opcode_vec[self.ip];
@@ -41,12 +42,7 @@ impl VM {
                 Opcode::Nop => {},
                 Opcode::LoadConstant(idx) => {
                     // store to stack
-                    self.stack.push(self.c_pool.get(idx).expect("none_value").clone());
-                }
-                Opcode::Add => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    let tmp2 = self.stack.pop().unwrap();
-                    self.stack.push(tmp1+tmp2);
+                    self.stack.push(Stack::Value(self.c_pool.get(idx).expect("none_value").clone()));
                 }
                 Opcode::StoreLocal(s) => {
                     let tmp1 = self.stack.pop().unwrap();
@@ -55,16 +51,17 @@ impl VM {
                     self.local_stack[len-1].push(s.clone());
                 }
                 Opcode::ClearLocal => {
+                    if self.local_stack.last().is_some() {
+                        self.local_stack.last().unwrap().iter().for_each(|f| {
+                            self.variable_stack.remove(f);
+                        });
 
-                    self.local_stack.last().unwrap().iter().for_each(|f| {
-                        self.variable_stack.remove(f);
-                    });
+                        for _i in 0..self.local_stack.len() {
+                            self.stack.pop();
+                        }
 
-                    for _i in 0..self.local_stack.len() {
-                        self.stack.pop();
-                    }
-
-                    self.local_stack.pop();
+                        self.local_stack.pop();
+                     }
                 }
                 Opcode::Begin => {
                     self.local_stack.push(Vec::new());
@@ -78,30 +75,45 @@ impl VM {
                         self.variable_stack.get(&n).unwrap().clone()
                     );
                 }
-                Opcode::Sub => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    let tmp2 = self.stack.pop().unwrap();
-                    self.stack.push(tmp1-tmp2);
-                }
+                Opcode::BinOp(op) => {
+                    let tmp1 = self.stack.pop().unwrap().as_value();
+                    let tmp2 = self.stack.pop().unwrap().as_value();
+                    self.stack.push(Stack::Value(
+                        match op.tok_type {
+                            crate::token::token_type::TokenType::Plus => tmp2 + tmp1,
+                            crate::token::token_type::TokenType::Minus => tmp2 - tmp1,
+                            crate::token::token_type::TokenType::Star => tmp2 * tmp1,
+                            crate::token::token_type::TokenType::Slash => tmp2 / tmp1,
+                            crate::token::token_type::TokenType::Less => Value::Boolean(tmp2 < tmp1),
+                            crate::token::token_type::TokenType::LessEqual => Value::Boolean(tmp2 <= tmp1),
+                            crate::token::token_type::TokenType::Greater => Value::Boolean(tmp2 > tmp1),
+                            crate::token::token_type::TokenType::GreaterEqual => Value::Boolean(tmp2 >= tmp1),
+                            crate::token::token_type::TokenType::NotEqual => Value::Boolean(tmp2 != tmp1),
+                            crate::token::token_type::TokenType::EqualEqual => Value::Boolean(tmp2 == tmp1),
+                            crate::token::token_type::TokenType::ShiftLeft => tmp2 << tmp1,
+                            crate::token::token_type::TokenType::ShiftRight => tmp2 >> tmp1,
+                            _ => unimplemented!("I wont implement that operator!")
+                        }));
+                },
+                Opcode::MakeFunc(sz) => {
 
-                Opcode::Mul => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    let tmp2 = self.stack.pop().unwrap();
-                    self.stack.push(tmp1*tmp2);
+                    let v = Vec::from( opcodes[self.ip+1..=self.ip+sz].to_vec() );
+                    self.ip+=sz;
+                    self.stack.push(Stack::CompressedFunc(v));
+                },
+                Opcode::Call => {
+                    let func = self.stack.pop().unwrap();
+                    self.run(func.as_compressed_func())?;
                 }
-
-                Opcode::Div => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    let tmp2 = self.stack.pop().unwrap();
-                    self.stack.push(tmp1/tmp2);
+                Opcode::JBackward(offset) => {
+                    self.ip -= offset;
                 }
-                Opcode::CmpLT => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    let tmp2 = self.stack.pop().unwrap();
-                    self.stack.push(Value::Boolean(tmp2 < tmp1));
+                Opcode::Agn(n) => {
+                    let v = self.stack.pop().unwrap();
+                    *self.variable_stack.get_mut(&n).unwrap() = v;
                 }
                 Opcode::JIfFalse(offset) => {
-                    let curr = self.stack.pop().unwrap();
+                    let curr = self.stack.pop().unwrap().as_value();
                     if curr == Value::Boolean(false) {
                         self.ip += offset;
                     }
@@ -110,21 +122,23 @@ impl VM {
                     self.ip += offset;
                 }
                 Opcode::Neg => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    self.stack.push(-tmp1);
+                    let tmp1 = self.stack.pop().unwrap().as_value();
+                    self.stack.push(Stack::Value(-tmp1));
                 },
                 Opcode::Not => {
-                    let tmp1 = self.stack.pop().unwrap();
-                    self.stack.push(!tmp1);
+                    let tmp1 = self.stack.pop().unwrap().as_value();
+                    self.stack.push(Stack::Value(!tmp1));
                 }
 
                 Opcode::Constant(v) => {
-                    self.stack.push(v.clone());
+                    self.stack.push(Stack::Value(v.clone()));
                 }
                 _ => result=Err(VMError::RuntimeError),
             }
             self.ip+=1;
         }
+        self.stack.clear();
+        self.variable_stack.clear();
         result
     }
 }

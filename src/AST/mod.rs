@@ -24,6 +24,15 @@ macro_rules! create_binary {
 }
 
 
+macro_rules! check_keyword {
+    ($self:ident, $keyword: expr, $func: expr) => {
+        if $self.peek().identifier == $keyword {
+            $self.advance();
+            return $func;
+        }
+    };
+}
+
 
 pub struct AST {
     token: Vec<TokenData>,
@@ -88,8 +97,12 @@ impl AST {
             return Box::new(Expr::Grouping(expr));
         }
 
-        if self.match_token(&mut vec![TokenType::Identifier, TokenType::Keywords, TokenType::DataType]) {
+        if self.match_token(&mut vec![TokenType::Keywords, TokenType::DataType]) {
             return Box::new(Expr::Identifier(self.previous().identifier));
+        }
+
+        if self.match_token(&mut vec![TokenType::Identifier]) {
+            return Box::new(Expr::Var(self.previous().identifier));
         }
 
         if self.match_token(&mut vec![TokenType::NewLine]) {
@@ -99,13 +112,29 @@ impl AST {
         panic!("Expect Expression at {}:{} ({:?})", self.peek().line, self.peek().end, self.peek().tok_type);
     }
 
+    fn callee(&mut self) -> Box<Expr> {
+        let mut primary = self.primary();
+        if self.match_token(&mut vec![TokenType::LeftParen]) {
+            let mut arg_v = Vec::new();
+            while !self.check(TokenType::RightParen) {
+                arg_v.push(*self.expr());
+                if !self.check(TokenType::RightParen) {
+                    self.consume(TokenType::Comma, "Expect ',' in parameter declare");
+                }
+            }
+            self.consume(TokenType::RightParen, "Expect ')' after callee");
+            primary = Box::new(Expr::Callee(primary, arg_v));
+        }
+        primary
+    }
+
     fn unary(&mut self) -> Box<Expr> {
         if self.match_token(&mut vec![TokenType::Not, TokenType::Minus]) {
             let op = self.previous();
             let expr = self.unary();
             return Box::new(Expr::Unary(op, expr));
         }
-        self.primary()
+        self.callee()
     }
     
     // very rust
@@ -118,7 +147,51 @@ impl AST {
     create_binary!(self, bool_logical, self.logical(), vec![TokenType::OrBool, TokenType::AndBool], self.logical());
 
     fn expr(&mut self) -> Box<Expr> {
-        self.bool_logical()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Box<Expr> {
+        let expr = self.bool_logical();
+
+        if self.match_token(&mut vec![TokenType::Equal]) {
+            let v = self.assignment();
+
+            if matches!(*expr, Expr::Var(_)) {
+                let n = expr.ident_to_string();
+                return Box::new(Expr::Assign(n, v));
+            }
+            panic!("Invaild assignment object");
+        }
+        return expr;
+    }
+
+    fn while_stmt(&mut self) -> Box<Expr> {
+        let expr = self.expr();
+        let body = self.statement();
+        return Box::new(Expr::WhileStmt(expr, body));
+    }
+
+    fn func_stmt(&mut self) -> Box<Expr> {
+        let func_name = self.primary();
+
+        self.consume(TokenType::LeftParen, "Expect '(' in declare func");
+        let mut arg_v = Vec::new();
+
+        while !self.check(TokenType::RightParen) {
+            arg_v.push(*self.var_decl());
+            if !self.check(TokenType::RightParen) {
+                self.consume(TokenType::Comma, "Expect ',' in arguments declare");
+            }
+        }
+
+        self.consume(TokenType::RightParen, "Expect ')' in declare func");
+        
+        self.consume(TokenType::LeftBrace, "Expect '{' in declare func");
+        let body = self.block();
+
+        Box::new(
+            Expr::FuncStmt(func_name.ident_to_string(), arg_v,body)
+        )
     }
 
     fn statement(&mut self) -> Box<Expr> {
@@ -126,10 +199,10 @@ impl AST {
         if self.match_token(&mut vec![TokenType::LeftBrace]) {
             return self.block();
         }
-        if self.peek().identifier == "if" {
-            self.advance();
-            return self.if_stmt();
-        }
+        check_keyword!(self, "if",self.if_stmt());
+        check_keyword!(self, "while", self.while_stmt());
+        check_keyword!(self, "func", self.func_stmt());
+
         let expr = self.var_decl();
         if ! matches!(*expr, Expr::None) {
             self.consume(TokenType::Semicolon, "Expect semicolon");
@@ -198,8 +271,8 @@ impl AST {
         let is_pointer = self.match_token(&mut vec![TokenType::Star]);
 
         let name = self.primary();
-        if !matches!(*name, Expr::Identifier(_)) {
-            panic!("Invaild variable name");
+        if !matches!(*name, Expr::Var(_)) {
+            panic!("Invaild variable type");
         }
 
         let mut init = None;

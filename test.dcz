@@ -1,14 +1,4 @@
 # extern putc(char);
 
-int a =3;
-
-if a < 2 {
-		int h = 0;
-} else if a < 1 {
-		int i = 0;
-} else {
-		int g = 0;
-}
-
-int b = 4;
-b;
+char stdin = 0;
+char stdout = 1;

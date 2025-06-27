@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use std::{fmt::{Debug, Display}};
-use crate::Value::Value;
+use crate::{token::TokenData, Value::Value};
 
 #[derive(Clone)]
 pub enum Opcode {
@@ -13,18 +13,6 @@ pub enum Opcode {
     LoadConstant(usize),
     ///CONSTANT
     Constant(Value),
-    /// ADD(lhs, rhs)
-    Add,
-    /// SUB(lhs, rhs)
-    Sub,
-    /// MUL(lhs, rhs)
-    Mul,
-    /// DIV(lhs, rhs)
-    Div,
-    /// SHL(lhs, rhs)
-    Shl,
-    /// SHR(lhs, rhs)
-    Shr,
     /// NOT
     Not,
     /// NEG
@@ -39,21 +27,20 @@ pub enum Opcode {
     ClearLocal,
     /// BEGIN
     Begin,
-    /// CMPLT
-    CmpLT,
-    /// CMPLE
-    CmpLE,
-    /// CMPGT
-    CmpGT,
-    /// CMPGE
-    CmpGE,
-    /// CMPEQ
-    CmpEQ,
+    /// BINOP(Binop)
+    BinOp(TokenData),
     /// JMP(offset)
     Jmp(usize),
+    /// JBackward
+    JBackward(usize),
     /// JIFFALSE(offset)
     JIfFalse(usize),
-
+    ///AGN(name)
+    Agn(String),
+    /// MAKEFUNC(Size)
+    MakeFunc(usize),
+    /// CALL
+    Call,
     /// NOP
     Nop,
 }
@@ -77,19 +64,8 @@ impl Debug for Opcode {
                 } else {
                     value = v.clone().to_float().to_string();
                 }
-                write!(f, "[VALUE (v: {})]", value)
+                write!(f, "[CONSTANT (v: {})]", value)
             }
-            Opcode::Add => write!(f, "[ADD (lhs + rhs)]"),
-            Opcode::Sub => write!(f, "[SUB (lhs + rhs)]"),
-            Opcode::Mul => write!(f, "[MUL (lhs * rhs)]"),
-            Opcode::Div => write!(f, "[DIV (lhs / rhs)]"),
-            Opcode::Shl => write!(f, "[SHL (lhs << rhs)]"),
-            Opcode::Shr => write!(f, "[SHR (lhs >> rhs)]"),
-            Opcode::CmpLT => write!(f, "[CMPLT (lhs < rhs)]"),
-            Opcode::CmpLE => write!(f, "[CMPLE (lhs <= rhs)]"),
-            Opcode::CmpGT => write!(f, "[CMPGT (lhs > rhs)]"),
-            Opcode::CmpGE => write!(f, "[CMPGE (lhs >= rhs)]"),
-            Opcode::CmpEQ => write!(f, "[CMPEQ (lhs == rhs)]"),
             Opcode::Not => write!(f, "[NOT (rhs)]"),
             Opcode::Neg => write!(f, "[NEG (rhs)]"),
             Opcode::Nop => write!(f,"[NOP]"),
@@ -99,7 +75,12 @@ impl Debug for Opcode {
             Opcode::ClearLocal => write!(f, "[CLEAR_LOCAL]"),
             Opcode::Begin => write!(f, "[BEGIN]"),
             Opcode::Jmp(offset) => write!(f, "[JMP ({})]", offset),
-            Opcode::JIfFalse(offset) => write!(f, "[JIFFALSE ({})]", offset)
+            Opcode::JIfFalse(offset) => write!(f, "[JIFFALSE ({})]", offset),
+            Opcode::JBackward(offset) => write!(f, "[JBackward ({})]", offset),
+            Opcode::BinOp(tt) => write!(f, "[BINOP (lhs {:?} rhs)]", tt.tok_type),
+            Opcode::Agn(n) => write!(f, "[AGN ({})]", n),
+            Opcode::MakeFunc(sz) => write!(f, "[MAKEFUNC ({})]", sz),
+            Opcode::Call => write!(f, "[CALL]")
         }
     }
 }
@@ -122,7 +103,7 @@ impl Display for Opcode {
 
 #[derive(Debug, Clone)]
 pub struct ConstantPool {
-    pub v: Vec<Value>
+    v: Vec<Value>
 }
 
 impl ConstantPool {
@@ -134,5 +115,8 @@ impl ConstantPool {
     }
     pub fn get(&self, idx: usize) -> Option<&Value> {
         self.v.iter().nth(idx)
+    }
+    pub fn len(&self) -> usize {
+        self.v.len()
     }
 }

@@ -167,6 +167,7 @@ impl Token {
                     }
                 }
                 '%' => self.add_symbol(TokenType::Modulo),
+                ',' => self.add_symbol(TokenType::Comma),
                 '#' => {
                     if self.match_chr('#') {
                         while self.match_str("##") && ! self.is_eof() {

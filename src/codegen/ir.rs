@@ -65,6 +65,7 @@ impl IrBuilder {
                 Opcode::Constant(v)=> {
                     if v.value().expect("null value").is::<String>() {
                         self.c_pool.append(v.clone());
+                        self.instr.push(Opcode::LoadConstant(self.c_pool.len()-1));
                     } else {
                         self.instr.push(x.clone());
                     }
@@ -80,16 +81,5 @@ impl IrBuilder {
 
     pub fn build(self) -> Ir {
         Ir { instr: self.instr }
-    }
-}
-
-impl FromIterator<Opcode> for IrBuilder {
-    fn from_iter<T: IntoIterator<Item = Opcode>>(iter: T) -> Self {
-        let mut irb = Self::new();
-
-        for x in iter {
-            irb=irb.append_from(x);
-        }
-        irb
     }
 }

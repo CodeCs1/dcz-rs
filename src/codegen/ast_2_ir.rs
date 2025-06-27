@@ -1,4 +1,4 @@
-use std::sync::{atomic::{AtomicBool, AtomicUsize}, Arc};
+use std::sync::atomic::AtomicBool;
 
 use crate::AST::expr_node::Expr;
 
@@ -25,20 +25,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
 
             let mut v=Vec::from(lhs_op);
             v.append(&mut rhs_op);
-            v.push(match op.tok_type {
-                crate::token::token_type::TokenType::Plus => Opcode::Add,
-                crate::token::token_type::TokenType::Minus => Opcode::Sub,
-                crate::token::token_type::TokenType::Star => Opcode::Mul,
-                crate::token::token_type::TokenType::Slash => Opcode::Div,
-                crate::token::token_type::TokenType::Less => Opcode::CmpLT,
-                crate::token::token_type::TokenType::LessEqual => Opcode::CmpLE,
-                crate::token::token_type::TokenType::Greater => Opcode::CmpGT,
-                crate::token::token_type::TokenType::GreaterEqual => Opcode::CmpGE,
-                crate::token::token_type::TokenType::EqualEqual => Opcode::CmpEQ,
-                crate::token::token_type::TokenType::ShiftLeft => Opcode::Shl,
-                crate::token::token_type::TokenType::ShiftRight => Opcode::Shr,
-                _ => unimplemented!()
-            });
+            v.push(Opcode::BinOp(op));
             v
         }
         Expr::VarDecl(_, is_p, s, init) => {
@@ -57,7 +44,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             }
             v
         },
-        Expr::Identifier(n) => {
+        Expr::Var(n) => {
             vec![Opcode::LoadName(n)]
         }
         Expr::Block(bl) => {
@@ -82,6 +69,38 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             v.push(Opcode::JIfFalse(then_v.len()));
             v.append(&mut then_v);
             v.append(&mut else_v);
+            v
+        }
+        Expr::Assign(n, v) => {
+            let mut v = Vec::from(visit_expr(*v));
+            v.push(Opcode::Agn(n));
+            v
+        },
+        Expr::WhileStmt(cond, body) => {
+            let mut v = Vec::from(visit_expr(*cond));
+            let cond_len = v.len();
+            let mut body = visit_expr(*body);
+            let body_len = body.len();
+            v.push(Opcode::JIfFalse(body_len+1));
+            v.append(&mut body);
+            v.push(Opcode::JBackward(body_len+cond_len+2));
+
+            v
+        },
+        Expr::FuncStmt(n, _args , body) => {
+            let mut v = Vec::new();
+            
+            let mut expr = visit_expr(*body);
+
+            v.push(Opcode::MakeFunc(expr.len()));
+            v.append(&mut expr);
+            v.push(Opcode::StoreName(n));
+            v
+        },
+        Expr::Callee(n, _args) => {
+            let mut v = Vec::new();
+            v.append(&mut visit_expr(*n));
+            v.push(Opcode::Call);
             v
         }
         Expr::Unary(op, rhs) => {

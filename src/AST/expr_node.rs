@@ -22,10 +22,16 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Macro(String,Vec<Expr>),
     Identifier(String),
+    Var(String),
     Statement(Box<Expr>),
     Block(Vec<Expr>),
+    Assign(String, Box<Expr>),
 
     IfStmt(Box<Expr>, Box<Expr>, Box<Expr>),
+    WhileStmt(Box<Expr>, Box<Expr>),
+    FuncStmt(String, Vec<Expr>, Box<Expr>),
+    
+    Callee(Box<Expr>, Vec<Expr>),
 
     /// Var declare Statement VarDecl(dt, is_pointer, name, initializer)
     VarDecl(DataType, bool,  String, Option<Box<Expr>>),
@@ -86,6 +92,7 @@ impl<'a> Expr
     pub fn ident_to_string(&self) -> String {
         match self {
             Expr::Identifier(s) => s.clone(),
+            Expr::Var(s) => s.clone(),
             _ => "".to_string()
         }
     }

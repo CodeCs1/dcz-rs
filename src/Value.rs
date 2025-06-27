@@ -80,6 +80,36 @@ impl std::ops::Not for Value {
     }
 }
 
+impl std::ops::Shl for Value {
+    type Output = Value;
+    fn shl(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            if self.clone().to_literal() >= 0 && rhs.clone().to_literal() >= 0 {
+                Value::Number(self.to_literal() << rhs.to_literal())
+            } else {
+                panic!("[SHL] It can only be applied for natural number")
+            }
+        } else {
+            panic!("[SHL] It can only be applied for natural number")
+        }
+    }
+}
+
+impl std::ops::Shr for Value {
+    type Output = Value;
+    fn shr(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            if self.clone().to_literal() >= 0 && rhs.clone().to_literal() >= 0 {
+                Value::Number(self.to_literal() >> rhs.to_literal())
+            } else {
+                panic!("[SHR] It can only be applied for natural number")
+            }
+        } else {
+            panic!("[SHR] It can only be applied for natural number")
+        }
+    }
+}
+
 impl std::ops::Div for Value {
     type Output = Value;
     fn div(self, rhs: Self) -> Self::Output {

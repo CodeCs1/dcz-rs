@@ -53,7 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
     if args.run {
         use VM::vm;
-        vm::VM::new(ast2ir.const_pool.clone(),opcode_list).run().expect("VMError");
+        vm::VM::new(ast2ir.const_pool.clone()).run(opcode_list.instr).expect("VMError");
     }
 
     /*
