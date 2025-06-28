@@ -1,4 +1,5 @@
 # extern putc(char);
 
-char stdin = 0;
-char stdout = 1;
+func main() {
+		while 1 {}
+}

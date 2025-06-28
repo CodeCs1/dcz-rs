@@ -129,6 +129,10 @@ impl Value {
     pub fn new_obj(obj_name: String) -> Self {
         Self::Object(obj_name)
     }
+    pub fn new_boolean_from(v: i64) -> Self {
+        if v == 0 { Self::Boolean(false) }
+        else { Self::Boolean(true) }
+    }
     pub fn new(string: String) -> Self {
         // convert string to specified value
         let strtrim = string.trim();

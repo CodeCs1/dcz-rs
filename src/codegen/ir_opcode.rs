@@ -41,6 +41,10 @@ pub enum Opcode {
     MakeFunc(usize),
     /// CALL
     Call,
+    /// PUSH(Value)
+    Push(Value),
+    /// POP
+    Pop,
     /// NOP
     Nop,
 }
@@ -80,6 +84,8 @@ impl Debug for Opcode {
             Opcode::BinOp(tt) => write!(f, "[BINOP (lhs {:?} rhs)]", tt.tok_type),
             Opcode::Agn(n) => write!(f, "[AGN ({})]", n),
             Opcode::MakeFunc(sz) => write!(f, "[MAKEFUNC ({})]", sz),
+            Opcode::Push(v) => write!(f, "[PUSH ({})]", v.clone().to_literal()),
+            Opcode::Pop => write!(f, "[POP]"),
             Opcode::Call => write!(f, "[CALL]")
         }
     }

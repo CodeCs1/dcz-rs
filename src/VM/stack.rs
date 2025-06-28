@@ -1,6 +1,6 @@
 use crate::{codegen::ir_opcode::Opcode, Value::Value};
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub enum Stack {
     Value(Value),
     MemoryAddr(usize),

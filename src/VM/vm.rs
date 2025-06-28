@@ -7,7 +7,6 @@ use super::stack::Stack;
 pub struct VM {
     c_pool: ConstantPool,
     stack: Vec<Stack>,
-    ip: usize,
     variable_stack: HashMap<String, Stack>,
     local_stack: Vec<Vec<String>>
 }
@@ -27,17 +26,17 @@ impl Debug for VMError {
 }
 impl VM {
     pub fn new(c_pool: ConstantPool) -> Self {
-        Self { c_pool: c_pool, ip: 0, stack: Vec::new(), variable_stack: HashMap::new(), local_stack: Vec::new() }
+        Self { c_pool: c_pool, stack: Vec::new(), variable_stack: HashMap::new(), local_stack: Vec::new() }
     }
 
-    pub fn run(&mut self, opcodes: Vec<Opcode>) -> Result<(), VMError> {
+    pub fn run(&mut self, opcodes: Vec<Opcode>, mut ip: usize) -> Result<(), VMError> {
         dbg!(&opcodes);
         let mut result = Result::Ok(());
 
         let opcode_vec = &opcodes;
 
-        while self.ip < opcode_vec.len() {
-            let op = &opcode_vec[self.ip];
+        while ip < opcode_vec.len() {
+            let op = &opcode_vec[ip];
             match op.clone() {
                 Opcode::Nop => {},
                 Opcode::LoadConstant(idx) => {
@@ -95,31 +94,38 @@ impl VM {
                             _ => unimplemented!("I wont implement that operator!")
                         }));
                 },
+                Opcode::Push(v) => {self.stack.push(Stack::Value(v)); },
+                Opcode::Pop => { self.stack.pop(); },
                 Opcode::MakeFunc(sz) => {
 
-                    let v = Vec::from( opcodes[self.ip+1..=self.ip+sz].to_vec() );
-                    self.ip+=sz;
+                    let v = Vec::from( opcodes[ip+1..=ip+sz].to_vec() );
+                    ip+=sz;
                     self.stack.push(Stack::CompressedFunc(v));
                 },
                 Opcode::Call => {
                     let func = self.stack.pop().unwrap();
-                    self.run(func.as_compressed_func())?;
+                    self.run(func.as_compressed_func(),0)?;
                 }
                 Opcode::JBackward(offset) => {
-                    self.ip -= offset;
+                    ip -= offset-1;
+                    continue;
                 }
                 Opcode::Agn(n) => {
                     let v = self.stack.pop().unwrap();
                     *self.variable_stack.get_mut(&n).unwrap() = v;
                 }
                 Opcode::JIfFalse(offset) => {
-                    let curr = self.stack.pop().unwrap().as_value();
+                    let mut curr = self.stack.pop().unwrap().as_value();
+                    if !matches!(curr, Value::Boolean(_)) {
+                        curr = Value::new_boolean_from(curr.to_literal());
+                    }
                     if curr == Value::Boolean(false) {
-                        self.ip += offset;
+                        ip += offset;
                     }
                 }
                 Opcode::Jmp(offset) => {
-                    self.ip += offset;
+                    ip += offset;
+                    continue;
                 }
                 Opcode::Neg => {
                     let tmp1 = self.stack.pop().unwrap().as_value();
@@ -135,7 +141,7 @@ impl VM {
                 }
                 _ => result=Err(VMError::RuntimeError),
             }
-            self.ip+=1;
+            ip+=1;        
         }
         self.stack.clear();
         self.variable_stack.clear();

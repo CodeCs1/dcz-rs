@@ -1,2 +1,3 @@
 target
 gitpush.sh
+*.o

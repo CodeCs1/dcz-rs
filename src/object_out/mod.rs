@@ -1,5 +1,7 @@
 use object::{write::{Object, Relocation, Symbol, SymbolId}, RelocationKind};
 
+use crate::Value::Value;
+
 
 
 pub struct ObjectOut<'a> {
@@ -45,6 +47,26 @@ impl<'a> ObjectOut<'a> {
             name: name.as_bytes().to_vec(),
             value: str_offset,
             size: data.len() as u64,
+            kind: object::SymbolKind::Data,
+            scope: object::SymbolScope::Linkage,
+            weak: false,
+            section: object::write::SymbolSection::Section(data_sect),
+            flags: object::SymbolFlags::None
+        })
+    }
+
+    ///
+    /// add_value_data(String, Value)
+    ///
+    /// Return SymbolID (see add_reloc())
+    pub fn add_value_data(&mut self, name: String, data: Value) -> SymbolId {
+        let data_sect = self.obj.section_id(object::write::StandardSection::Data);
+
+        let offset = self.obj.append_section_data(data_sect, &data.clone().to_literal().to_ne_bytes().to_vec() as &[u8], 1);
+        self.obj.add_symbol(Symbol {
+            name: name.as_bytes().to_vec(),
+            value: offset,
+            size: (data.to_literal().checked_ilog10().unwrap_or(0)+1) as u64,
             kind: object::SymbolKind::Data,
             scope: object::SymbolScope::Linkage,
             weak: false,

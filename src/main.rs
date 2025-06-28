@@ -2,6 +2,8 @@
 
 use std::{fs::File, io::Read/*, iter::zip*/};
 use clap::Parser;
+use codegen::codegen::Codegen;
+use object_out::ObjectOut;
 //use codegen::codegen::Codegen;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
@@ -24,7 +26,7 @@ mod VM;
 struct Cmd {
     file: String,
 
-    #[arg(short, long, default_value_t=true)]
+    #[arg(short, long)]
     /// Run speficied script.
     run: bool,
 
@@ -53,11 +55,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
     if args.run {
         use VM::vm;
-        vm::VM::new(ast2ir.const_pool.clone()).run(opcode_list.instr).expect("VMError");
+        vm::VM::new(ast2ir.const_pool.clone()).run(opcode_list.instr,0).expect("VMError");
+        return Ok(());
     }
 
-    /*
-    let mut code_gen = Codegen::new(ast_tree);
+    
+    let mut code_gen = Codegen::new(opcode_list);
 
     let opcode = code_gen.instr().assemble(0)?;
 
@@ -65,14 +68,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     obj.init_with_opcode(opcode);
     
 
-    let code_zip = zip(t.data.return_data(), code_gen.blob_location);
-
-    code_zip.for_each(|((n,v),o)| {
-        let str_sym = obj.add_str_data(n.clone(), v.clone().to_string());
-        obj.add_reloc(str_sym, o as u64);
+    code_gen.assign_location.iter().for_each(|(n,v)| {
+        obj.add_value_data(n.clone(),v.clone());
     });
 
-    std::fs::write("output.o", obj.write_buff()).expect("Failed to save output.o");*/
+    std::fs::write("output.o", obj.write_buff()).expect("Failed to save output.o");
 
 
     Ok(())

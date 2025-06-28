@@ -87,7 +87,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
 
             v
         },
-        Expr::FuncStmt(n, _args , body) => {
+        Expr::FuncStmt(n, args , body) => {
             let mut v = Vec::new();
             
             let mut expr = visit_expr(*body);
@@ -97,9 +97,12 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             v.push(Opcode::StoreName(n));
             v
         },
-        Expr::Callee(n, _args) => {
+        Expr::Callee(n, args) => {
             let mut v = Vec::new();
             v.append(&mut visit_expr(*n));
+            for x in &args {
+                v.push(Opcode::Push(x.to_value()));
+            }
             v.push(Opcode::Call);
             v
         }
