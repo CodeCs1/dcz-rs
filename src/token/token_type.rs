@@ -7,6 +7,7 @@ pub enum TokenType {
     Number,
     Macro,
     String,
+    Char,
 
     Plus,
     Minus,

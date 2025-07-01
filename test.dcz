@@ -1,5 +1,7 @@
 # extern putc(char);
 
 func main() {
-		while 1 {}
+		int variable_test = 4;
 }
+
+

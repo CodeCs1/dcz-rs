@@ -1,10 +1,6 @@
 use crate::token::{token_type::TokenType, TokenData};
 pub mod expr_node;
 pub mod ast_checker;
-pub mod ir_expr;
-
-
-
 use expr_node::Expr;
 
 macro_rules! create_binary {
@@ -88,7 +84,7 @@ impl AST {
     }
 
     fn primary(&mut self) -> Box<Expr> {
-        if self.match_token(&mut vec![TokenType::Number, TokenType::String]) {
+        if self.match_token(&mut vec![TokenType::Number, TokenType::String, TokenType::Char]) {
             return Box::new(Expr::Literal(self.previous().value));
         }
         if self.match_token(&mut vec![TokenType::LeftParen]) {

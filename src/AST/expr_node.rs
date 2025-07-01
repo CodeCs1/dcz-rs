@@ -3,7 +3,7 @@
 use crate::{token::TokenData, Value};
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum DataType {
     Char,
     Short,

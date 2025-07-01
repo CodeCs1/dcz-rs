@@ -15,17 +15,17 @@ impl<'a> ObjectOut<'a> {
         }
     }
 
-    /// init(opcode)
+    /// add_func(name, opcode)
     /// 
-    /// Initialize elf object with specified opcode vector (.text)
+    /// Add function name into .text section 
     ///
 
-    pub fn init_with_opcode(&mut self, opcode: Vec<u8>) {
-         let text_sect = self.obj.add_section(self.obj.segment_name(object::write::StandardSegment::Text).to_vec(),".text".as_bytes().to_vec(), object::SectionKind::Text);
+    pub fn add_func(&mut self, name: &str, opcode: Vec<u8>) {
+         //let text_sect = self.obj.add_section(self.obj.segment_name(object::write::StandardSegment::Text).to_vec(),".text".as_bytes().to_vec(), object::SectionKind::Text);
+         let text_sect = self.obj.section_id(object::write::StandardSection::Text);
          self.obj.append_section_data(text_sect, &opcode, 1);
-         
          self.obj.add_symbol(Symbol { 
-             name: b"_start".to_vec(),
+             name: name.as_bytes().to_vec(),
              value: 0,
              size: opcode.len() as u64,
              kind: object::SymbolKind::Text,
@@ -74,7 +74,6 @@ impl<'a> ObjectOut<'a> {
             flags: object::SymbolFlags::None
         })
     }
-
 
     ///
     /// add_reloc(SymbolId)

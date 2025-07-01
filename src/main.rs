@@ -60,12 +60,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     }
 
     
-    let mut code_gen = Codegen::new(opcode_list);
+    let mut code_gen = Codegen::new();
 
-    let opcode = code_gen.instr().assemble(0)?;
+    let mut opcode = code_gen.instr(opcode_list.instr);
 
     let mut obj = ObjectOut::new();
-    obj.init_with_opcode(opcode);
+
+    for (n,o) in code_gen.func_location.iter_mut() {
+        obj.add_func(n.as_str(), o.assemble(0)?);
+    }
+
+    //obj.add_func("_start",opcode.assemble(0)?);
     
 
     code_gen.assign_location.iter().for_each(|(n,v)| {

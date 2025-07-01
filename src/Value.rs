@@ -9,6 +9,7 @@ pub enum Value {
     Double(f64),
     Str(String),
     Object(String),
+    Char(char),
     Boolean(bool)
 }
 
@@ -125,6 +126,12 @@ impl std::ops::Div for Value {
     }
 }
 
+macro_rules! get_cast_value {
+    ($self: ident, $data_type: ident) => {
+        $self.to_any().downcast_ref::<$data_type>().unwrap()
+    };
+}
+
 impl Value {
     pub fn new_obj(obj_name: String) -> Self {
         Self::Object(obj_name)
@@ -144,6 +151,8 @@ impl Value {
             Self::Double(strtrim.parse::<f64>().unwrap())
         } else if strtrim.parse::<bool>().is_ok() {
             Self::Boolean(strtrim.parse::<bool>().unwrap())
+        } else if strtrim.parse::<char>().is_ok() {
+            Self::Char(strtrim.parse::<char>().unwrap())
         } else {
             if strtrim.len() == 0 {
                 Self::Null
@@ -152,21 +161,33 @@ impl Value {
             }
         }
     }
-    
+
+    pub fn to_any(self) -> Box<dyn std::any::Any> {
+        self.value().expect("null value")
+    }
+
     pub fn to_literal(self) -> i64 {
-        *self.value().expect("value").downcast_ref::<i64>().unwrap()
+        //*self.value().expect("value").downcast_ref::<i64>().unwrap()
+        *get_cast_value!(self, i64)
     }
 
     pub fn to_float(self) -> f32 {
-        *self.value().expect("null value").downcast_ref::<f32>().unwrap()
+        //*self.value().expect("null value").downcast_ref::<f32>().unwrap()
+        *get_cast_value!(self, f32)
+    }
+
+    pub fn to_char(self) -> char {
+        //*self.value().expect("null value").downcast_ref()
+        *get_cast_value!(self, char)
     }
 
     pub fn to_double(self) -> f64 {
-        *self.value().expect("null value").downcast_ref::<f64>().unwrap()
+        *get_cast_value!(self, f64)
     }
 
     pub fn to_string(self) -> String {
-        self.value().expect("null value").downcast_ref::<String>().unwrap().clone()
+        //self.value().expect("null value").downcast_ref::<String>().unwrap().clone()
+        get_cast_value!(self,String).clone()
     }
 
     pub fn value(&self) -> Option<Box<dyn std::any::Any>> {
@@ -177,7 +198,8 @@ impl Value {
             Value::Double(double) => Some(Box::new(double.clone())),
             Value::Str(string) => Some(Box::new(string[1..string.len()-1].to_string())),
             Value::Object(obj) => Some(Box::new(obj.clone())),
-            Value::Boolean(b) => Some(Box::new(b.clone()))
+            Value::Boolean(b) => Some(Box::new(b.clone())),
+            Value::Char(c) => Some(Box::new(c.clone()))
         }
     }
 }

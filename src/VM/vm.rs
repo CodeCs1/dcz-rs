@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Debug, hash::Hash};
+use std::{collections::HashMap, fmt::Debug};
 
 use crate::{codegen::ir_opcode::*, Value::Value};
 
@@ -38,18 +38,18 @@ impl VM {
         while ip < opcode_vec.len() {
             let op = &opcode_vec[ip];
             match op.clone() {
-                Opcode::Nop => {},
+                Opcode::Nop | Opcode::EndFunc => {},
                 Opcode::LoadConstant(idx) => {
                     // store to stack
                     self.stack.push(Stack::Value(self.c_pool.get(idx).expect("none_value").clone()));
                 }
-                Opcode::StoreLocal(s) => {
+                Opcode::StoreLocal(_,s) => {
                     let tmp1 = self.stack.pop().unwrap();
                     self.variable_stack.entry(s.clone()).or_insert_with(|| tmp1);
                     let len = self.local_stack.len();
                     self.local_stack[len-1].push(s.clone());
                 }
-                Opcode::ClearLocal => {
+                Opcode::End => {
                     if self.local_stack.last().is_some() {
                         self.local_stack.last().unwrap().iter().for_each(|f| {
                             self.variable_stack.remove(f);
@@ -65,7 +65,7 @@ impl VM {
                 Opcode::Begin => {
                     self.local_stack.push(Vec::new());
                 }
-                Opcode::StoreName(s) => {
+                Opcode::StoreGlobal(_,s) => {
                     let tmp1 = self.stack.pop().unwrap(); // get value
                     self.variable_stack.entry(s.clone()).or_insert_with(|| tmp1);
                 }
@@ -96,11 +96,12 @@ impl VM {
                 },
                 Opcode::Push(v) => {self.stack.push(Stack::Value(v)); },
                 Opcode::Pop => { self.stack.pop(); },
-                Opcode::MakeFunc(sz) => {
+                Opcode::MakeFunc(sz,s) => {
 
                     let v = Vec::from( opcodes[ip+1..=ip+sz].to_vec() );
                     ip+=sz;
-                    self.stack.push(Stack::CompressedFunc(v));
+                    let comfunc = Stack::CompressedFunc(v);
+                    self.variable_stack.entry(s.clone()).or_insert_with(|| comfunc);
                 },
                 Opcode::Call => {
                     let func = self.stack.pop().unwrap();

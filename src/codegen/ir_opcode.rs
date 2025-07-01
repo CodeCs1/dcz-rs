@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use std::{fmt::{Debug, Display}};
-use crate::{token::TokenData, Value::Value};
+use std::{any::TypeId, fmt::{Debug, Display}};
+use crate::{token::TokenData, Value::Value, AST::expr_node::DataType};
 
 #[derive(Clone)]
 pub enum Opcode {
@@ -17,14 +17,14 @@ pub enum Opcode {
     Not,
     /// NEG
     Neg,
-    /// STORE_NAME
-    StoreName(String),
+    /// STORE_GLOBAL
+    StoreGlobal(DataType, String),
     /// LOAD_NAME
     LoadName(String),
     /// STORE_LOCAL
-    StoreLocal(String),
-    /// CLEAR_LOCAL
-    ClearLocal,
+    StoreLocal(DataType, String),
+    /// End
+    End,
     /// BEGIN
     Begin,
     /// BINOP(Binop)
@@ -37,8 +37,10 @@ pub enum Opcode {
     JIfFalse(usize),
     ///AGN(name)
     Agn(String),
-    /// MAKEFUNC(Size)
-    MakeFunc(usize),
+    /// MAKEFUNC(Size, Name)
+    MakeFunc(usize,String),
+    ///END_FUNC
+    EndFunc,
     /// CALL
     Call,
     /// PUSH(Value)
@@ -60,33 +62,50 @@ impl Debug for Opcode {
             },
             Opcode::LoadConstant(idx) => write!(f, "[LOADCONSTANT (idx: {})]", idx),
             Opcode::Constant(v) => {
+                /*
                 let mut value = String::new();
                 if v.value().unwrap().is::<i64>() {
                     value = v.clone().to_literal().to_string();
                 } else if v.value().unwrap().is::<String>() {
                     value = v.clone().to_string();
-                } else {
-                    value = v.clone().to_float().to_string();
+                } else if v.value().unwrap().is::<char>() {
+                    value = v.clone().to_char().to_string();
                 }
+                else {
+                    value = v.clone().to_float().to_string();
+                }*/
+                let any = v.clone().to_any();
+                let value=
+                    if any.is::<i64>() {
+                        v.clone().to_literal().to_string()
+                    } else if any.is::<String>() {
+                        v.clone().to_string()
+                    } else if any.is::<char>() {
+                        v.clone().to_char().to_string()
+                    } else {
+                        v.clone().to_float().to_string()
+                    };
+
                 write!(f, "[CONSTANT (v: {})]", value)
             }
             Opcode::Not => write!(f, "[NOT (rhs)]"),
             Opcode::Neg => write!(f, "[NEG (rhs)]"),
             Opcode::Nop => write!(f,"[NOP]"),
             Opcode::LoadName(n) => write!(f, "[LOAD_NAME ({})]", n),
-            Opcode::StoreName(s) => write!(f, "[STORE_NAME ({})]", s),
-            Opcode::StoreLocal(s) => write!(f, "[STORE_LOCAL ({})]", s),
-            Opcode::ClearLocal => write!(f, "[CLEAR_LOCAL]"),
+            Opcode::StoreGlobal(d,s) => write!(f, "[STORE_GLOBAL ({:?} {})]", d,s),
+            Opcode::StoreLocal(d,s) => write!(f, "[STORE_LOCAL ({:?} {})]", d,s),
+            Opcode::End => write!(f, "[END]"),
             Opcode::Begin => write!(f, "[BEGIN]"),
             Opcode::Jmp(offset) => write!(f, "[JMP ({})]", offset),
             Opcode::JIfFalse(offset) => write!(f, "[JIFFALSE ({})]", offset),
             Opcode::JBackward(offset) => write!(f, "[JBackward ({})]", offset),
             Opcode::BinOp(tt) => write!(f, "[BINOP (lhs {:?} rhs)]", tt.tok_type),
             Opcode::Agn(n) => write!(f, "[AGN ({})]", n),
-            Opcode::MakeFunc(sz) => write!(f, "[MAKEFUNC ({})]", sz),
+            Opcode::MakeFunc(sz,name) => write!(f, "[MAKEFUNC {}({})]", name,sz),
             Opcode::Push(v) => write!(f, "[PUSH ({})]", v.clone().to_literal()),
             Opcode::Pop => write!(f, "[POP]"),
-            Opcode::Call => write!(f, "[CALL]")
+            Opcode::Call => write!(f, "[CALL]"),
+            Opcode::EndFunc => write!(f, "[END_FUNC]")
         }
     }
 }

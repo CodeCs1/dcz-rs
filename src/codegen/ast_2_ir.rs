@@ -28,7 +28,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             v.push(Opcode::BinOp(op));
             v
         }
-        Expr::VarDecl(_, is_p, s, init) => {
+        Expr::VarDecl(data_type, is_p, s, init) => {
             if is_p {
                 unimplemented!("Pointer declare not yet implemented.");
             }
@@ -38,9 +38,9 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             }
             let mut v = Vec::from(v);
             if !IN_BLOCK.load(std::sync::atomic::Ordering::Relaxed) {
-                v.push(Opcode::StoreName(s));
+                v.push(Opcode::StoreGlobal(data_type,s));
             } else {
-                v.push(Opcode::StoreLocal(s));
+                v.push(Opcode::StoreLocal(data_type,s));
             }
             v
         },
@@ -55,7 +55,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             bl.iter().for_each(|f| { v.append(&mut visit_expr(f.clone()) ); });
             IN_BLOCK.store(false, std::sync::atomic::Ordering::SeqCst);
 
-            v.push(Opcode::ClearLocal);
+            v.push(Opcode::End);
             v
         }
         Expr::IfStmt(cond,then , elsecase) => {
@@ -79,11 +79,18 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
         Expr::WhileStmt(cond, body) => {
             let mut v = Vec::from(visit_expr(*cond));
             let cond_len = v.len();
-            let mut body = visit_expr(*body);
-            let body_len = body.len();
-            v.push(Opcode::JIfFalse(body_len+1));
-            v.append(&mut body);
-            v.push(Opcode::JBackward(body_len+cond_len+2));
+            if cond_len == 1 {
+                let mut body = visit_expr(*body);
+                let body_len = body.len();
+                v.append(&mut body);
+                v.push(Opcode::JBackward(body_len));
+            } else {
+                let mut body = visit_expr(*body);
+                let body_len = body.len();
+                v.push(Opcode::JIfFalse(body_len+1));
+                v.append(&mut body);
+                v.push(Opcode::JBackward(body_len+cond_len+2));
+            }
 
             v
         },
@@ -92,9 +99,10 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             
             let mut expr = visit_expr(*body);
 
-            v.push(Opcode::MakeFunc(expr.len()));
+            v.push(Opcode::MakeFunc(expr.len(),n));
             v.append(&mut expr);
-            v.push(Opcode::StoreName(n));
+            v.push(Opcode::EndFunc);
+            //v.push(Opcode::StoreName(n));
             v
         },
         Expr::Callee(n, args) => {

@@ -63,7 +63,8 @@ impl IrBuilder {
         for x in v {
             match x {
                 Opcode::Constant(v)=> {
-                    if v.value().expect("null value").is::<String>() {
+                    let v_ = v.value().expect("null value");
+                    if v_.is::<String>() {
                         self.c_pool.append(v.clone());
                         self.instr.push(Opcode::LoadConstant(self.c_pool.len()-1));
                     } else {

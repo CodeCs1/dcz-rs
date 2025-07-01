@@ -218,6 +218,14 @@ impl Token {
                     }
                     self.add_token(TokenType::Number, self.code[self.start..self.current].to_string());
                 }
+                '\'' => {
+                    // char support
+                    self.advance();
+                    if !self.match_chr('\'') {
+                        panic!("Invaild char format!");
+                    }
+                    self.add_token(TokenType::Char, self.code[self.start+1..self.current-1].to_string());
+                }
                 'a'..='z' | 'A'..='Z' | '_' => {
                     let kw = vec![
                         //block code
@@ -240,7 +248,7 @@ impl Token {
                         "long"
                     ];
 
-                    while self.peek().is_alphanumeric()  { self.advance(); }
+                    while self.peek().is_alphanumeric() || self.peek() == '_' { self.advance(); }
 
                     let str_text = &self.code[self.start..self.current];
 
