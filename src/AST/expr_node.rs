@@ -13,6 +13,17 @@ pub enum DataType {
     Suu // replace for double data type
 }
 
+impl DataType {
+    pub fn size(&self) -> u32 {
+        match self {
+            DataType::Char => 1,
+            DataType::Short => 2,
+            DataType::Int | DataType::Float => 4,
+            DataType::Long | DataType::Suu => 8,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     /// Binary Expression (Expr, Operator, Expr)

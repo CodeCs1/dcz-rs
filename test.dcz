@@ -1,7 +1,6 @@
 # extern putc(char);
 
-func main() {
-		int variable_test = 4;
+func abcxyz() {
+		char c='a';
+		short s=0;
 }
-
-

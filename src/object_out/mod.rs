@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicU64;
+
 use object::{write::{Object, Relocation, Symbol, SymbolId}, RelocationKind};
 
 use crate::Value::Value;
@@ -23,16 +25,21 @@ impl<'a> ObjectOut<'a> {
     pub fn add_func(&mut self, name: &str, opcode: Vec<u8>) {
          //let text_sect = self.obj.add_section(self.obj.segment_name(object::write::StandardSegment::Text).to_vec(),".text".as_bytes().to_vec(), object::SectionKind::Text);
          let text_sect = self.obj.section_id(object::write::StandardSection::Text);
+         static FUNC_COUNTER: AtomicU64 = AtomicU64::new(0);
+         let c =  FUNC_COUNTER.fetch_add(opcode.len() as u64, std::sync::atomic::Ordering::Relaxed);
          self.obj.append_section_data(text_sect, &opcode, 1);
          self.obj.add_symbol(Symbol { 
              name: name.as_bytes().to_vec(),
-             value: 0,
-             size: opcode.len() as u64,
+             value: c,
+             size: 0,
              kind: object::SymbolKind::Text,
              scope: object::SymbolScope::Linkage,
              weak: false,
              section: object::write::SymbolSection::Section(text_sect),
              flags: object::SymbolFlags::None });
+         //let tsym = self.obj.section_symbol(text_sect);
+
+         //self.obj.add_relocation(text_sect, Relocation { offset: 0,symbol: tsym,addend: c as i64, flags: object::RelocationFlags::Generic { kind: RelocationKind::Absolute, encoding: object::RelocationEncoding::Generic, size: 64 } }).expect("Add func");
     }
 
     ///
