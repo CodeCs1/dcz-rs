@@ -43,7 +43,7 @@ impl VM {
                     // store to stack
                     self.stack.push(Stack::Value(self.c_pool.get(idx).expect("none_value").clone()));
                 }
-                Opcode::StoreLocal(_,s) => {
+                Opcode::StoreLocal(_,_,s) => {
                     let tmp1 = self.stack.pop().unwrap();
                     self.variable_stack.entry(s.clone()).or_insert_with(|| tmp1);
                     let len = self.local_stack.len();
@@ -65,7 +65,7 @@ impl VM {
                 Opcode::Begin => {
                     self.local_stack.push(Vec::new());
                 }
-                Opcode::StoreGlobal(_,s) => {
+                Opcode::StoreGlobal(_,_,s) => {
                     let tmp1 = self.stack.pop().unwrap(); // get value
                     self.variable_stack.entry(s.clone()).or_insert_with(|| tmp1);
                 }
@@ -103,7 +103,7 @@ impl VM {
                     let comfunc = Stack::CompressedFunc(v);
                     self.variable_stack.entry(s.clone()).or_insert_with(|| comfunc);
                 },
-                Opcode::Call => {
+                Opcode::Call(_) => {
                     let func = self.stack.pop().unwrap();
                     self.run(func.as_compressed_func(),0)?;
                 }

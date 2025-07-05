@@ -19,6 +19,7 @@ mod Value;
 mod test;
 mod codegen;
 mod VM;
+mod MessageHandler;
 
 
 #[derive(Parser, Debug)]
@@ -44,13 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     t.tokenize();
 
     let mut p=dcz_ast::new(t.tok_data);
-    
     let ast_tree = p.parse();
-
-    let _ = Checker::new(&ast_tree).check()?;
-
-    let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(ast_tree);
-
+    let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(Checker::new(&ast_tree).check()?);
     let opcode_list = ast2ir.to_ir();
 
     if args.run {
@@ -62,16 +58,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     
     let mut code_gen = Codegen::new();
 
-    let mut opcode = code_gen.instr(opcode_list.instr);
+    code_gen.instr(opcode_list.instr,0);
 
     let mut obj = ObjectOut::new();
-
+    let mut func_vec = Vec::new();
     for (n,o) in code_gen.func_location.iter_mut() {
-        obj.add_func(n.as_str(), o.assemble(0)?);
+        func_vec.push((n.clone(),obj.add_func(n.as_str(), o.assemble(0)?)));
     }
-
-    //obj.add_func("_start",opcode.assemble(0)?);
+    /*
+    if opcode.instructions().len() > 0 {
+        obj.add_func("_start",opcode.assemble(0)?);
+    }*/
     
+    code_gen.call_location.iter().for_each(|(n,loc)| {
+        if let Some(idx) = func_vec.iter().position(|(f,_)| f == n) {
+            let (_,sym) = func_vec[idx];
+            //dbg!(loc);
+            obj.add_text_reloc(sym, *loc as u64, -4);
+        }
+    });
 
     code_gen.assign_location.iter().for_each(|(n,v)| {
         obj.add_value_data(n.clone(),v.clone());

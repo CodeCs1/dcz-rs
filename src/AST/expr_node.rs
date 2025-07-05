@@ -40,12 +40,14 @@ pub enum Expr {
 
     IfStmt(Box<Expr>, Box<Expr>, Box<Expr>),
     WhileStmt(Box<Expr>, Box<Expr>),
-    FuncStmt(String, Vec<Expr>, Box<Expr>),
-    
+    /// FuncStmt(name, args, body, return_type)
+    FuncStmt(String, Vec<(DataType, String)>, Box<Expr>, Option<DataType>),
     Callee(Box<Expr>, Vec<Expr>),
 
     /// Var declare Statement VarDecl(dt, is_pointer, name, initializer)
     VarDecl(DataType, bool,  String, Option<Box<Expr>>),
+
+    Return(Option<Box<Expr>>),
 
     None
 }
@@ -90,8 +92,13 @@ impl<'a> Expr
                     crate::token::token_type::TokenType::Not => !rhs.to_value(),
                     _ => unimplemented!()
                 })
+            },
+            Expr::VarDecl(_dt, _, _n, _init) => {
+                Expr::None
             }
-            _ => todo!()
+            Expr::Var(_) => self.clone(),
+            Expr::Statement(st) => st.visit(),
+            o => todo!("Expr visit does not implemented {:?} yet ", o)
         }
     }
     pub fn to_value(&self) -> Value::Value {

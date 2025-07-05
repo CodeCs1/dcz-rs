@@ -1,6 +1,6 @@
 use token_type::TokenType;
 
-use crate::{DataSection::DataSection, Value::Value};
+use crate::{DataSection::DataSection, MessageHandler::message_handler, Value::Value};
 pub mod token_type;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -209,13 +209,29 @@ impl Token {
                     // add str to data section
                     self.data.append_string(sub_str);
                 }
+
                 '0'..='9' => {
-                    while self.peek().is_digit(10) { self.advance(); }
+
+                    let mut radix = 10;
+
+                    if curr_char == '0' {
+                        radix = match self.peek() {
+                            'x' => { self.advance(); 16 },
+                            'b' => { self.advance(); 2 },
+                            'o' => { self.advance(); 8 },
+                            _ => { 10 }
+                        };
+                    }
+
+                    while self.peek().is_digit(radix) { self.advance(); }
                     
-                    if self.peek() == '.' && self.peek_next().is_digit(10) {
+                    
+                    if self.peek() == '.' && self.peek_next().is_digit(10) && radix==10 {
                         self.advance();
                         while self.peek().is_digit(10) { self.advance(); }
                     }
+                    
+
                     self.add_token(TokenType::Number, self.code[self.start..self.current].to_string());
                 }
                 '\'' => {

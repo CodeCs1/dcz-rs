@@ -28,36 +28,11 @@ impl IrBuilder {
     pub fn new() -> Self {
         Self { instr: Vec::new(), c_pool: ConstantPool::new() }
     }
-    pub fn args(mut self, idx: u128, is_write: bool, v: Value) -> Self {
-        self.instr.push(
-            Opcode::Args(idx, is_write, v)
-            );
-        self
-    }
-
-    pub fn ret(mut self) -> Self {
-        self.instr.push(Opcode::Return);
-        self
-    }
-
-    pub fn constant(mut self, v: Value) -> Self {
-        self.c_pool.append(v);
-        self
-    }
-
-    pub fn load_constant(mut self, idx: usize) -> Self {
-        self.instr.push(Opcode::LoadConstant(idx));
-        self
-    }
 
     pub fn get_const_pool(&self) -> ConstantPool {
         self.c_pool.clone()
     }
 
-    pub fn append_from(mut self, op: Opcode) -> Self {
-        self.instr.push(op);
-        self
-    }
 
     pub fn append_from_vec(mut self, v: &mut Vec<Opcode>) -> Self {
         for x in v {

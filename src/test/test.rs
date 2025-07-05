@@ -122,10 +122,4 @@ mod test {
         assert_eq!(*v.value().unwrap().downcast_ref::<i64>().unwrap(), 1)
     }
 
-    #[test]
-    fn ir_test1() {
-        let irb1 = IrBuilder::new().constant(Constant { idx: 0 }).ret().build();
-        dbg!(&irb1);
-        assert_eq!(irb1.to_string(), "load_const(0)\nret")
-    }
 }

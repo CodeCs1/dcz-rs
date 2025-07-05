@@ -1,11 +1,11 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::AST::expr_node::Expr;
+use crate::AST::{ast_checker::FAST, expr_node::Expr};
 
 use super::{ir::{Ir, IrBuilder}, ir_opcode::{ConstantPool, Opcode}};
 
 pub struct Ast2Ir {
-    expr: Vec<Expr>,
+    expr: Vec<FAST>,
     pub const_pool: ConstantPool
 }
 
@@ -29,18 +29,15 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             v
         }
         Expr::VarDecl(data_type, is_p, s, init) => {
-            if is_p {
-                unimplemented!("Pointer declare not yet implemented.");
-            }
-            let mut v = vec![Opcode::Nop];
+            let mut v = Vec::new();
             if init.is_some() {
                 v = visit_expr(*init.unwrap());
             }
             let mut v = Vec::from(v);
             if !IN_BLOCK.load(std::sync::atomic::Ordering::Relaxed) {
-                v.push(Opcode::StoreGlobal(data_type,s));
+                v.push(Opcode::StoreGlobal(data_type,is_p,s));
             } else {
-                v.push(Opcode::StoreLocal(data_type,s));
+                v.push(Opcode::StoreLocal(data_type,is_p,s));
             }
             v
         },
@@ -94,25 +91,51 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
 
             v
         },
-        Expr::FuncStmt(n, args , body) => {
+        Expr::FuncStmt(n, args , body,r_d) => {
             let mut v = Vec::new();
             
             let mut expr = visit_expr(*body);
 
             v.push(Opcode::MakeFunc(expr.len(),n));
+
+            args.iter().for_each(|(d,n)| {
+                v.push(Opcode::StoreParam(d.clone(), n.clone()))
+            });
             v.append(&mut expr);
+
+            if let Some(_) = r_d {
+                //v.push(Opcode::Constant(crate::Value::Value::Number(0)));
+                let ret_last = expr.last();
+                if ret_last.is_some() {
+                    let r = ret_last.unwrap();
+                    if !matches!(r, Opcode::Return(_)) {
+                        v.push(Opcode::Invaild)
+                    }
+                } else {
+                    v.push(Opcode::Invaild);
+                }
+            }
+
             v.push(Opcode::EndFunc);
             //v.push(Opcode::StoreName(n));
             v
         },
         Expr::Callee(n, args) => {
             let mut v = Vec::new();
-            v.append(&mut visit_expr(*n));
             for x in &args {
-                v.push(Opcode::Push(x.to_value()));
+                v.push(Opcode::StoreArg(x.to_value()));
             }
-            v.push(Opcode::Call);
+            v.push(Opcode::Call(n.ident_to_string()));
             v
+        },
+        Expr::Return(val_ret) => {
+            if val_ret.is_some() {
+                return vec![Opcode::Return(Some(val_ret.unwrap().to_value()))];
+            }
+
+            vec![Opcode::Return(None)]
+
+            
         }
         Expr::Unary(op, rhs) => {
             let rhs_op = visit_expr(*rhs);
@@ -130,7 +153,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
     }
 }
 impl Ast2Ir {
-    pub fn new(vect: Vec<Expr>) -> Self{
+    pub fn new(vect: Vec<FAST>) -> Self{
         Ast2Ir { expr: vect, const_pool: ConstantPool::new() }
     }
 
@@ -138,7 +161,7 @@ impl Ast2Ir {
         let mut irb = IrBuilder::new();
 
         for x in self.expr.iter_mut() {
-            irb=irb.append_from_vec(&mut visit_expr(x.clone()));
+            irb=irb.append_from_vec(&mut visit_expr(x.expr.clone()));
         }
         self.const_pool = irb.get_const_pool();
 

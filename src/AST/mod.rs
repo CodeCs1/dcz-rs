@@ -168,25 +168,43 @@ impl AST {
     }
 
     fn func_stmt(&mut self) -> Box<Expr> {
+
+        /*
+         * func test(suu test_args) = suu {
+         *  return 4;
+         * }
+         *
+         * func no_return_type {
+         *  return 4;
+         * }
+         * */
+
         let func_name = self.primary();
 
         self.consume(TokenType::LeftParen, "Expect '(' in declare func");
         let mut arg_v = Vec::new();
 
         while !self.check(TokenType::RightParen) {
-            arg_v.push(*self.var_decl());
+            let dt = self.primary().to_datatype().expect("Expect data type - FuncStmt");
+            let name = self.primary().ident_to_string();
+            arg_v.push((dt, name));
             if !self.check(TokenType::RightParen) {
                 self.consume(TokenType::Comma, "Expect ',' in arguments declare");
             }
         }
 
         self.consume(TokenType::RightParen, "Expect ')' in declare func");
-        
+
+        let return_type = if self.match_token(&mut vec![TokenType::Equal]) {
+            Some(self.primary().to_datatype().expect("Invaild data type"))
+        } else {
+            None
+        };
         self.consume(TokenType::LeftBrace, "Expect '{' in declare func");
         let body = self.block();
 
         Box::new(
-            Expr::FuncStmt(func_name.ident_to_string(), arg_v,body)
+            Expr::FuncStmt(func_name.ident_to_string(), arg_v,body, return_type)
         )
     }
 
@@ -198,6 +216,8 @@ impl AST {
         check_keyword!(self, "if",self.if_stmt());
         check_keyword!(self, "while", self.while_stmt());
         check_keyword!(self, "func", self.func_stmt());
+        check_keyword!(self, "extern", self.extern_func());
+        check_keyword!(self, "return", self.return_keyw());
 
         let expr = self.var_decl();
         if ! matches!(*expr, Expr::None) {
@@ -208,6 +228,25 @@ impl AST {
         } else {
             Box::new(Expr::None)
         }
+    }
+
+    fn return_keyw(&mut self) -> Box<Expr> {
+        // return 3;
+        let mut v = None;
+        if !self.check(TokenType::Semicolon) {
+            v = Some(self.expr());
+        }
+
+        self.consume(TokenType::Semicolon, "Expect ';' after return keyw");
+        Box::new(
+
+            Expr::Return(v)
+
+            )
+    }
+
+    fn extern_func(&mut self) -> Box<Expr> {
+        todo!("Extern func not implemented yet")
     }
 
 

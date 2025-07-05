@@ -142,9 +142,21 @@ impl Value {
     }
     pub fn new(string: String) -> Self {
         // convert string to specified value
-        let strtrim = string.trim();
-        if strtrim.parse::<i64>().is_ok() {
-            Self::Number(strtrim.parse::<i64>().unwrap())
+        let mut strtrim = string.trim();
+        let radix = if strtrim.starts_with("0x") { 
+            16 
+        } 
+        else if strtrim.starts_with("0b") {2}
+        else if strtrim.starts_with("0o") {8}
+        else {10};
+        strtrim = if strtrim.starts_with("0x") || strtrim.starts_with("0b") || strtrim.starts_with("0o") {
+            &strtrim[2..]
+        } else {
+            &strtrim[..]
+        };
+
+        if let Ok(v) = i64::from_str_radix(strtrim, radix) {
+            Self::Number(v)
         } else if strtrim.parse::<f32>().is_ok() {
             Self::Float(strtrim.parse::<f32>().unwrap())
         } else if strtrim.parse::<f64>().is_ok() {
@@ -196,7 +208,7 @@ impl Value {
             Value::Number(number) => Some(Box::new(number.clone())),
             Value::Float(float) => Some(Box::new(float.clone())),
             Value::Double(double) => Some(Box::new(double.clone())),
-            Value::Str(string) => Some(Box::new(string[1..string.len()-1].to_string())),
+            Value::Str(string) => Some(Box::new(string.trim().to_string())),
             Value::Object(obj) => Some(Box::new(obj.clone())),
             Value::Boolean(b) => Some(Box::new(b.clone())),
             Value::Char(c) => Some(Box::new(c.clone()))

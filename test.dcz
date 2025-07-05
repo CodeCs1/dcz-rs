@@ -1,6 +1,11 @@
 # extern putc(char);
 
-func abcxyz() {
-		char c='a';
-		short s=0;
+#extern putc(char) = int;
+
+func main() = int {
+		int a = 1024;
+
+		int b = a;
+		
+		return 0;
 }

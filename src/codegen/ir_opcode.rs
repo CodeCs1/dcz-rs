@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
-use std::{any::TypeId, fmt::{Debug, Display}};
+use std::fmt::{Debug, Display};
 use crate::{token::TokenData, Value::Value, AST::expr_node::DataType};
 
 #[derive(Clone)]
 pub enum Opcode {
-    /// ARG(num, RW?, Value)
-    Args(u128, bool, Value),
-    /// RET opcode
-    Return,
+    ///INVAILD
+    Invaild,
+    /// RET
+    Return(Option<Value>),
     /// LOADCONSTANT(idx)
     LoadConstant(usize),
     ///CONSTANT
@@ -18,11 +18,15 @@ pub enum Opcode {
     /// NEG
     Neg,
     /// STORE_GLOBAL
-    StoreGlobal(DataType, String),
+    StoreGlobal(DataType,bool, String),
     /// LOAD_NAME
     LoadName(String),
     /// STORE_LOCAL
-    StoreLocal(DataType, String),
+    StoreLocal(DataType, bool,String),
+    /// STORE_Param
+    StoreParam(DataType, String),
+    /// STORE_ARG
+    StoreArg(Value),
     /// End
     End,
     /// BEGIN
@@ -41,8 +45,8 @@ pub enum Opcode {
     MakeFunc(usize,String),
     ///END_FUNC
     EndFunc,
-    /// CALL
-    Call,
+    /// CALL(name)
+    Call(String),
     /// PUSH(Value)
     Push(Value),
     /// POP
@@ -54,12 +58,7 @@ pub enum Opcode {
 impl Debug for Opcode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Opcode::Args(n, r, _) => {
-                write!(f,"[ARG (idx: {}, is_write: {}, value: not_implemented)]", n,r)
-            }
-            Opcode::Return => {
-                write!(f,"[RET]")
-            },
+            Opcode::Return(v) => write!(f,"[RET {:?}]", v.clone()),
             Opcode::LoadConstant(idx) => write!(f, "[LOADCONSTANT (idx: {})]", idx),
             Opcode::Constant(v) => {
                 /*
@@ -92,8 +91,8 @@ impl Debug for Opcode {
             Opcode::Neg => write!(f, "[NEG (rhs)]"),
             Opcode::Nop => write!(f,"[NOP]"),
             Opcode::LoadName(n) => write!(f, "[LOAD_NAME ({})]", n),
-            Opcode::StoreGlobal(d,s) => write!(f, "[STORE_GLOBAL ({:?} {})]", d,s),
-            Opcode::StoreLocal(d,s) => write!(f, "[STORE_LOCAL ({:?} {})]", d,s),
+            Opcode::StoreGlobal(d,is_p,s) => write!(f, "[STORE_GLOBAL ({:?}(ptr: {}) {})]", d,is_p,s),
+            Opcode::StoreLocal(d,is_p,s) => write!(f, "[STORE_LOCAL ({:?}(ptr: {}) {})]", d,is_p,s),
             Opcode::End => write!(f, "[END]"),
             Opcode::Begin => write!(f, "[BEGIN]"),
             Opcode::Jmp(offset) => write!(f, "[JMP ({})]", offset),
@@ -104,8 +103,11 @@ impl Debug for Opcode {
             Opcode::MakeFunc(sz,name) => write!(f, "[MAKEFUNC {}({})]", name,sz),
             Opcode::Push(v) => write!(f, "[PUSH ({})]", v.clone().to_literal()),
             Opcode::Pop => write!(f, "[POP]"),
-            Opcode::Call => write!(f, "[CALL]"),
-            Opcode::EndFunc => write!(f, "[END_FUNC]")
+            Opcode::Call(n) => write!(f, "[CALL ({})]", n.clone()),
+            Opcode::EndFunc => write!(f, "[END_FUNC]"),
+            Opcode::StoreParam(d, n) => write!(f, "[STORE_PARAM ({:?} {})]", d,n.to_string()),
+            Opcode::StoreArg(v) => write!(f, "[STORE_ARG ({:?})]", v),
+            Opcode::Invaild => write!(f, "[INVAILD]")
         }
     }
 }
@@ -113,13 +115,7 @@ impl Debug for Opcode {
 impl Display for Opcode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Opcode::Args(n, r, v) => {
-                match r {
-                    true =>write!(f,"arg{} {}", n, v.clone().to_literal()),
-                    false =>write!(f, "arg{}", n),
-                }
-            },
-            Opcode::Return => write!(f, "ret"),
+            Opcode::Return(v) => write!(f, "ret {:?}", v),
             Opcode::Nop => write!(f, "nop"),
             _ => todo!()
         }

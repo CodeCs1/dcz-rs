@@ -1,6 +1,8 @@
+#![allow(dead_code)]
+
 use std::sync::atomic::AtomicU64;
 
-use object::{write::{Object, Relocation, Symbol, SymbolId}, RelocationKind};
+use object::{write::{Object, Relocation, Symbol, SymbolId}};
 
 use crate::Value::Value;
 
@@ -22,7 +24,7 @@ impl<'a> ObjectOut<'a> {
     /// Add function name into .text section 
     ///
 
-    pub fn add_func(&mut self, name: &str, opcode: Vec<u8>) {
+    pub fn add_func(&mut self, name: &str, opcode: Vec<u8>) -> SymbolId {
          //let text_sect = self.obj.add_section(self.obj.segment_name(object::write::StandardSegment::Text).to_vec(),".text".as_bytes().to_vec(), object::SectionKind::Text);
          let text_sect = self.obj.section_id(object::write::StandardSection::Text);
          static FUNC_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -36,7 +38,7 @@ impl<'a> ObjectOut<'a> {
              scope: object::SymbolScope::Linkage,
              weak: false,
              section: object::write::SymbolSection::Section(text_sect),
-             flags: object::SymbolFlags::None });
+             flags: object::SymbolFlags::None })
          //let tsym = self.obj.section_symbol(text_sect);
 
          //self.obj.add_relocation(text_sect, Relocation { offset: 0,symbol: tsym,addend: c as i64, flags: object::RelocationFlags::Generic { kind: RelocationKind::Absolute, encoding: object::RelocationEncoding::Generic, size: 64 } }).expect("Add func");
@@ -83,16 +85,16 @@ impl<'a> ObjectOut<'a> {
     }
 
     ///
-    /// add_reloc(SymbolId)
+    /// add_text_reloc(SymbolId)
     ///
-    ///
-    pub fn add_reloc(&mut self, sym: SymbolId, at: u64) {
+    /// Relocation symbol into .text section
+    pub fn add_text_reloc(&mut self, sym: SymbolId, at: u64, append: i64) {
         let tsect = self.obj.section_id(object::write::StandardSection::Text);
         self.obj.add_relocation(tsect, Relocation {
             offset: at,
             symbol: sym,
-            addend: 0,
-            flags: object::RelocationFlags::Generic { kind: RelocationKind::Absolute, encoding:object::RelocationEncoding::Generic, size: 64 } 
+            addend: append,
+            flags: object::RelocationFlags::Elf { r_type: 4 } 
         }).expect("Failed to relocation");
     }
 
