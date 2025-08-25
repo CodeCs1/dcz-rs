@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, sync::atomic::AtomicUsize};
 use crate::Value::Value;
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataSection {
     dotdata: BTreeMap<String, Value>
 }

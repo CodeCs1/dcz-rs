@@ -26,8 +26,7 @@ pub enum TokenType {
     Or,
     Not,
     Comma,
-    
-
+    Colon,
     NotEqual,
     EqualEqual,
     Less,
@@ -38,10 +37,6 @@ pub enum TokenType {
     ShiftRight,
     AndBool,
     OrBool,
-
-    NewLine,
-
-
+    PointTo,
     EOF
-
 }

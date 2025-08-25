@@ -1,6 +1,8 @@
+use std::{fs::File,io::Read, path::Path, process::exit};
+
 use token_type::TokenType;
 
-use crate::{DataSection::DataSection, MessageHandler::message_handler, Value::Value};
+use crate::{DataSection::DataSection, MessageHandler::message_handler::{self, throw_message}, Value::Value};
 pub mod token_type;
 
 #[derive(Debug, PartialEq, Clone)]
@@ -10,17 +12,27 @@ pub struct TokenData {
     pub end: usize,
     pub line: usize,
     pub identifier: String,
-    pub value: Value
+    pub value: Value,
+    pub sub_tok: Option<Vec<TokenData>>
+}
+
+// Source file metadata
+#[derive(Debug, Clone)]
+pub struct MetaData {
+    pub filename: String,
+    pub tok_data: Vec<TokenData>,
+    pub data: DataSection,
 }
 
 
 pub struct Token {
     code: String,
-    pub tok_data: Vec<TokenData>,
     current: usize,
+    at: usize,
     start: usize,
     line: usize,
-    pub data: DataSection
+    data: DataSection,
+    pub source_file_name:String,
 }
 
 fn fmt_escape(string: String) -> String {
@@ -55,27 +67,38 @@ fn fmt_escape(string: String) -> String {
 
 impl Token {
     pub fn new(code: String) -> Self {
-        Self { code: code, tok_data: Vec::new(), current:0,start:0, line:1, data: DataSection::new() }
+        Self { code: code, current:0,start:0, line:1, data: DataSection::new(), source_file_name: "stdin".to_string(), at:0 }
+    }
+
+    pub fn FromIO(p: &Path, mut fileio: File) -> Result<Self,Box<dyn std::error::Error>> {
+        let mut file_content = String::new();
+        fileio.read_to_string(&mut file_content)?;
+        Ok(Self { code: file_content,current:0,start:0, line:1, data: DataSection::new(), source_file_name: p.display().to_string(), at:0 })
     }
 
     fn is_eof(&self) -> bool {
         self.current >= self.code.len()
     }
 
-    fn add_token(&mut self, tok_type: TokenType, identifier: String) {
-    self.tok_data.push(TokenData { tok_type: tok_type, start: self.start, end: self.current, identifier: identifier.clone(), line: self.line , value: Value::new(identifier)});
+    fn ToTokenData_Symbol(&self, tok_type:TokenType) -> TokenData {
+        self.To_TokenData_Identifier(tok_type, String::new())
+    }
+
+    fn To_TokenData_Identifier(&self, tok_type: TokenType, identifier: String) -> TokenData {
+        TokenData { tok_type: tok_type, start: self.start, end: self.current, identifier: identifier.clone(), line: self.line , value: Value::new(identifier), sub_tok: None}
     }    
-    fn add_str_token(&mut self, identifier: String) {
-        self.tok_data.push(TokenData { tok_type: TokenType::String, start: self.start, end: self.current, identifier: identifier.clone(), line: self.line , value: Value::new(identifier[1..identifier.len()-1].to_string())});
+    fn To_TokenData_String(&self, string_literal: String) -> TokenData {
+        TokenData { tok_type: TokenType::String, start: self.start, end: self.current, identifier: string_literal.clone(), line: self.line , value: Value::new(string_literal[1..string_literal.len()-1].to_string()),sub_tok: None}
     }
-    fn add_obj_token(&mut self, tok_type: TokenType, identifier: String) {
-        self.tok_data.push(TokenData { tok_type: tok_type, start: self.start, end: self.current, identifier: identifier.clone(), line: self.line , value: Value::new_obj(identifier.trim().to_string())});
+    fn To_TokenData_Obj(&self, tok_type: TokenType, identifier: String) -> TokenData {
+        TokenData { tok_type: tok_type, start: self.start, end: self.current, identifier: identifier.clone(), line: self.line , value: Value::new_obj(identifier.trim().to_string()),sub_tok: None}
     }
-    fn add_symbol(&mut self, token_type: TokenType) {
-        self.add_token(token_type, String::new());
+    fn To_TokenData_SubToken(&self, tok_type: TokenType, sub_tok: Vec<TokenData>) -> TokenData {
+        TokenData { tok_type: tok_type, start: self.start, end: self.current, line: self.line, identifier: String::new(), value: Value::Null, sub_tok: Some(sub_tok) }
     }
     fn advance(&mut self) -> char {
         self.current+=1;
+        self.at+=1;
         self.code.chars().nth(self.current-1).unwrap()
     }
 
@@ -89,6 +112,7 @@ impl Token {
         if self.code.chars().nth(self.current).unwrap() != expect { return false; }
 
         self.current+=1;
+        self.at+=1;
 
         true
     }
@@ -104,110 +128,136 @@ impl Token {
         self.code.chars().nth(self.current+1).expect("peek_next: null char returned")
     }
 
-    pub fn tokenize(&mut self) {
-        while !self.is_eof() {
-            self.start = self.current;
-            let curr_char = self.advance();
-            match curr_char {
-                '(' => self.add_symbol(TokenType::LeftParen),
-                ')' => self.add_symbol(TokenType::RightParen),
-                '{' => self.add_symbol(TokenType::LeftBrace),
-                '}' => self.add_symbol(TokenType::RightBrace),
-                '[' => self.add_symbol(TokenType::LeftBracket),
-                ']' => self.add_symbol(TokenType::RightBracket),
-                '+' => self.add_symbol(TokenType::Plus),
-                '-' => self.add_symbol(TokenType::Minus),
-                '*' => self.add_symbol(TokenType::Star),
-                '/' => self.add_symbol(TokenType::Slash),
-                ';' => self.add_symbol(TokenType::Semicolon),
-                '=' => {
-                    if self.match_chr('=') {
-                        self.add_symbol(TokenType::EqualEqual);
+    fn tokenize_single_char(&mut self) -> Option<TokenData> {
+        self.start = self.current;
+        let curr_char = self.advance();
+        match curr_char {
+            '(' => Some(self.ToTokenData_Symbol(TokenType::LeftParen)),
+            ')' => Some(self.ToTokenData_Symbol(TokenType::RightParen)),
+            '{' => Some(self.ToTokenData_Symbol(TokenType::LeftBrace)),
+            '}' => Some(self.ToTokenData_Symbol(TokenType::RightBrace)),
+            '[' => Some(self.ToTokenData_Symbol(TokenType::LeftBracket)),
+            ']' => Some(self.ToTokenData_Symbol(TokenType::RightBracket)),
+            '+' => Some(self.ToTokenData_Symbol(TokenType::Plus)),
+            '-' => {
+                if self.match_chr('>') {
+                    Some(self.ToTokenData_Symbol(TokenType::PointTo))
+                }else {
+                    Some(self.ToTokenData_Symbol(TokenType::Minus))
+                }
+            },
+            '*' => Some(self.ToTokenData_Symbol(TokenType::Star)),
+            '/' => Some(self.ToTokenData_Symbol(TokenType::Slash)),
+            ';' => Some(self.ToTokenData_Symbol(TokenType::Semicolon)),
+            ':' => Some(self.ToTokenData_Symbol(TokenType::Colon)),
+            '=' => {
+                if self.match_chr('=') {
+                        Some(self.ToTokenData_Symbol(TokenType::EqualEqual))
                     } else {
-                        self.add_symbol(TokenType::Equal);
+                        Some(self.ToTokenData_Symbol(TokenType::Equal))
                     }
                 },
                 '>' => {
                     if self.match_chr('=') {
-                        self.add_symbol(TokenType::GreaterEqual);
+                        Some(self.ToTokenData_Symbol(TokenType::GreaterEqual))
                     } else if self.match_chr('>') {
-                        self.add_symbol(TokenType::ShiftRight);
+                        Some(self.ToTokenData_Symbol(TokenType::ShiftRight))
                     } else {
-                        self.add_symbol(TokenType::Greater);
+                        Some(self.ToTokenData_Symbol(TokenType::Greater))
                     }
                 }
                 '&' => {
                     if self.match_chr('&') {
-                        self.add_symbol(TokenType::AndBool);
+                        Some(self.ToTokenData_Symbol(TokenType::AndBool))
                     } else {
-                        self.add_symbol(TokenType::And);
+                        Some(self.ToTokenData_Symbol(TokenType::And))
                     }
                 }
                 '|' => {
                     if self.match_chr('|') {
-                        self.add_symbol(TokenType::OrBool);
+                        Some(self.ToTokenData_Symbol(TokenType::OrBool))
                     } else {
-                        self.add_symbol(TokenType::Or);
+                        Some(self.ToTokenData_Symbol(TokenType::Or))
                     }
                 }
                 '<' => {
                     if self.match_chr('=') {
-                        self.add_symbol(TokenType::LessEqual);
+                        Some(self.ToTokenData_Symbol(TokenType::LessEqual))
                     } else if self.match_chr('<') {
-                        self.add_symbol(TokenType::ShiftLeft);
+                        Some(self.ToTokenData_Symbol(TokenType::ShiftLeft))
                     } else {
-                        self.add_symbol(TokenType::Less);
+                        Some(self.ToTokenData_Symbol(TokenType::Less))
                     }
                 }
                 '!' => {
                     if self.match_chr('=') {
-                        self.add_symbol(TokenType::NotEqual);
+                        Some(self.ToTokenData_Symbol(TokenType::NotEqual))
                     } else {
-                        self.add_symbol(TokenType::Not);
+                        Some(self.ToTokenData_Symbol(TokenType::Not))
                     }
                 }
-                '%' => self.add_symbol(TokenType::Modulo),
-                ',' => self.add_symbol(TokenType::Comma),
+                '%' => Some(self.ToTokenData_Symbol(TokenType::Modulo)),
+                ',' => Some(self.ToTokenData_Symbol(TokenType::Comma)),
                 '#' => {
                     if self.match_chr('#') {
                         while self.match_str("##") && ! self.is_eof() {
                             if self.peek() == '\n' { self.line+=1; }
                             self.advance();
                         }
+                        None
                     } else if self.match_chr('!') {
-                        while self.peek() != ' ' && !self.is_eof() {
-                            self.advance();
+                        let mut sub_token: Vec<TokenData> = Vec::new();
+
+                        while self.peek() != '\n' && !self.is_eof() {
+                            let td = self.tokenize_single_char();
+                            if td.is_some() {
+                                sub_token.push(
+                                    td.unwrap()
+                                );
+                            }
                         }
 
-                        self.add_obj_token(TokenType::Macro, self.code[self.start+2..self.current].to_string());
+                        Some(self.To_TokenData_SubToken(TokenType::Macro, sub_token))
 
                     } else {
                         while self.peek() != '\n' && ! self.is_eof() {
                             self.advance();
                         }
+                        None
                     }
                 }
 
                 '"' => {
                     while self.peek() != '"' && !self.is_eof() {
                         if self.peek() == '\n' {
-                            panic!("Invaild string format.")
+                            throw_message(
+                            &self.source_file_name, 
+                            message_handler::MessageType::Error,
+                            self.line as i64, 
+                            self.at as i64, 
+                            "Invaild string literal format");
+                            exit(1);
                         }
                         self.advance();
                     }
 
                     if self.is_eof() {
-                        panic!("Unterminated string");
+                        throw_message(
+                            &self.source_file_name, 
+                            message_handler::MessageType::Error,
+                            self.line as i64, 
+                            self.at as i64, 
+                            "Unterminated string literal");
+                            exit(1);
                     }
                     self.advance();
                     let mut sub_str = self.code[self.start..self.current].to_string();
 
                     sub_str = fmt_escape(sub_str);
 
-                    self.add_str_token( sub_str.clone());
-
                     // add str to data section
-                    self.data.append_string(sub_str);
+                    self.data.append_string(sub_str.clone());
+                    Some(self.To_TokenData_String(sub_str.clone()))
                 }
 
                 '0'..='9' => {
@@ -232,15 +282,21 @@ impl Token {
                     }
                     
 
-                    self.add_token(TokenType::Number, self.code[self.start..self.current].to_string());
+                    Some(self.To_TokenData_Identifier(TokenType::Number, self.code[self.start..self.current].to_string()))
                 }
                 '\'' => {
                     // char support
                     self.advance();
                     if !self.match_chr('\'') {
-                        panic!("Invaild char format!");
+                        throw_message(
+                            &self.source_file_name, 
+                            message_handler::MessageType::Error,
+                            self.line as i64, 
+                            self.at as i64, 
+                            "Invaild char format!");
+                        exit(1);
                     }
-                    self.add_token(TokenType::Char, self.code[self.start+1..self.current-1].to_string());
+                    Some(self.To_TokenData_Identifier(TokenType::Char, self.code[self.start+1..self.current-1].to_string()))
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
                     let kw = vec![
@@ -261,7 +317,8 @@ impl Token {
                         "suu",
                         "char",
                         "short",
-                        "long"
+                        "long",
+                        "const"
                     ];
 
                     while self.peek().is_alphanumeric() || self.peek() == '_' { self.advance(); }
@@ -269,27 +326,55 @@ impl Token {
                     let str_text = &self.code[self.start..self.current];
 
                     if kw.iter().any(|f| *f==str_text) {
-                        //self.add_symbol(TokenType::Keywords);
-                        self.add_obj_token(TokenType::Keywords, str_text.to_string());
+                        //self.ToTokenData_Symbol(TokenType::Keywords);
+                        Some(self.To_TokenData_Obj(TokenType::Keywords, str_text.to_string()))
                     } else if data_type_kw.iter().any(|f| *f==str_text)  {
-                        self.add_obj_token(TokenType::DataType, str_text.to_string());
+                        Some(self.To_TokenData_Obj(TokenType::DataType, str_text.to_string()))
                     } else {
-                        //self.add_symbol(TokenType::Identifier);
-                        self.add_obj_token(TokenType::Identifier, str_text.to_string());
+                        //self.ToTokenData_Symbol(TokenType::Identifier);
+                        Some(self.To_TokenData_Obj(TokenType::Identifier, str_text.to_string()))
                     }
                 }
-                '\r' | '\t' | ' ' => {},
+                '\r' | '\t' | ' ' => {None},
                 '\n' => { 
-                    self.add_symbol(TokenType::NewLine);
                     self.line+=1;
+                    self.at = 0;
+                    None
                 },
                 _ => {
-                    panic!("Undefined token {}.", curr_char);
+                    throw_message(&self.source_file_name, 
+                        message_handler::MessageType::Error, 
+                        self.at as i64, 
+                        self.current as i64,
+                        &format!("Unknown token: {}", curr_char)
+                    );
+                    exit(1);
                 }
             }
+    }
+
+    pub fn tokenize(&mut self) -> MetaData {
+        let mut token_data: Vec<TokenData> = Vec::new();
+        while !self.is_eof() {
+            let tok_data = self.tokenize_single_char();
+            if tok_data.is_some() {
+                token_data.push(tok_data.unwrap());
+            }
         }
+        token_data.push(
+            TokenData { 
+                tok_type: TokenType::EOF,
+                start: self.start, 
+                end: self.current, 
+                line:self.line, 
+                identifier: String::new(), 
+                value: Value::Null ,
+                sub_tok: None
+            });
+
         self.current = 0;
         self.start =0;
-        self.add_symbol(TokenType::EOF);
+
+        MetaData { filename: self.source_file_name.clone(), tok_data: token_data, data: self.data.clone() }
     }
 }

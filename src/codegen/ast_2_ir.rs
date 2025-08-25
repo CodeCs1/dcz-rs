@@ -28,7 +28,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
             v.push(Opcode::BinOp(op));
             v
         }
-        Expr::VarDecl(data_type, is_p, s, init) => {
+        Expr::VarDecl(data_type, is_p,_, s, init) => {
             let mut v = Vec::new();
             if init.is_some() {
                 v = visit_expr(*init.unwrap());

@@ -1,6 +1,7 @@
 
 #![allow(dead_code)]
 
+use crate::AST::expr_node::DataType;
 #[derive(Debug, PartialEq, Clone, PartialOrd)]
 pub enum Value {
     Null,
@@ -10,7 +11,8 @@ pub enum Value {
     Str(String),
     Object(String),
     Char(char),
-    Boolean(bool)
+    Boolean(bool),
+    List(Vec<Value>)
 }
 
 impl std::ops::Add for Value {
@@ -178,6 +180,48 @@ impl Value {
         self.value().expect("null value")
     }
 
+    pub fn is_literal(self) -> bool {
+        //*self.value().expect("value").downcast_ref::<i64>().unwrap()
+        //*get_cast_value!(self, i64)
+
+        self.clone().to_any().downcast_ref::<i64>().is_some()
+    }
+
+    pub fn is_float(self) -> bool {
+        //*self.value().expect("null value").downcast_ref::<f32>().unwrap()
+        self.clone().to_any().downcast_ref::<f32>().is_some()
+    }
+
+    pub fn is_char(self) -> bool {
+        //*self.value().expect("null value").downcast_ref()
+        self.clone().to_any().downcast_ref::<char>().is_some()
+    }
+
+    pub fn is_double(self) -> bool {
+        self.clone().to_any().downcast_ref::<f64>().is_some()
+    }
+
+    pub fn is_string(self) -> bool {
+        //self.value().expect("null value").downcast_ref::<String>().unwrap().clone()
+        self.clone().to_any().downcast_ref::<String>().is_some()
+    }
+
+    pub fn to_datatype(self) -> DataType {
+        if matches!(self, Self::Double(_)) {
+            DataType::Suu
+        } else if matches!(self, Self::Boolean(_)) || matches!(self, Self::Char(_)) {
+            DataType::Char
+        } else if matches!(self, Self::Number(_)) {
+            DataType::Int
+        } else if matches!(self, Self::Float(_)) {
+            DataType::Float
+        }
+        else {
+            DataType::Unknown
+        }
+    }
+
+
     pub fn to_literal(self) -> i64 {
         //*self.value().expect("value").downcast_ref::<i64>().unwrap()
         *get_cast_value!(self, i64)
@@ -211,7 +255,8 @@ impl Value {
             Value::Str(string) => Some(Box::new(string.trim().to_string())),
             Value::Object(obj) => Some(Box::new(obj.clone())),
             Value::Boolean(b) => Some(Box::new(b.clone())),
-            Value::Char(c) => Some(Box::new(c.clone()))
+            Value::Char(c) => Some(Box::new(c.clone())),
+            Value::List(v) => Some(Box::new(v.clone()))
         }
     }
 }

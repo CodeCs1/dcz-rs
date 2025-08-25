@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{token::TokenData, Value};
+use crate::{token::TokenData, Value::{self}};
 
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,7 +10,8 @@ pub enum DataType {
     Int,
     Long,
     Float,
-    Suu // replace for double data type
+    Suu, // replace for double data type
+    Unknown
 }
 
 impl DataType {
@@ -20,6 +21,7 @@ impl DataType {
             DataType::Short => 2,
             DataType::Int | DataType::Float => 4,
             DataType::Long | DataType::Suu => 8,
+            _ => 0
         }
     }
 }
@@ -44,8 +46,10 @@ pub enum Expr {
     FuncStmt(String, Vec<(DataType, String)>, Box<Expr>, Option<DataType>),
     Callee(Box<Expr>, Vec<Expr>),
 
-    /// Var declare Statement VarDecl(dt, is_pointer, name, initializer)
-    VarDecl(DataType, bool,  String, Option<Box<Expr>>),
+    /// Var declare Statement VarDecl(dt, is_pointer, is_constant, name, initializer)
+    VarDecl(DataType, bool, bool, String, Option<Box<Expr>>),
+
+    List(Vec<Value::Value>),
 
     Return(Option<Box<Expr>>),
 
@@ -63,26 +67,27 @@ impl<'a> Expr
                 let lhs = lhs.visit();
                 let rhs = rhs.visit();
 
-                let mut result = Value::Value::Null;
 
-                if matches!(lhs, Expr::Literal(_)) && matches!(rhs, Expr::Literal(_)) {
-                    result=match op.tok_type {
-                        crate::token::token_type::TokenType::Plus => lhs.to_value()+rhs.to_value(),
-                        crate::token::token_type::TokenType::Minus => lhs.to_value()-rhs.to_value(),
-                        crate::token::token_type::TokenType::Star => lhs.to_value()*rhs.to_value(),
-                        crate::token::token_type::TokenType::Slash => lhs.to_value()/rhs.to_value(),
-                        crate::token::token_type::TokenType::Less => Value::Value::Number((lhs.to_value()<rhs.to_value()) as i64),
-                        crate::token::token_type::TokenType::Greater => Value::Value::Number((lhs.to_value()>rhs.to_value()) as i64),
-                        crate::token::token_type::TokenType::LessEqual => Value::Value::Number((lhs.to_value()<=rhs.to_value()) as i64),
-                        crate::token::token_type::TokenType::GreaterEqual => Value::Value::Number((lhs.to_value()>=rhs.to_value()) as i64),
-                        crate::token::token_type::TokenType::EqualEqual => Value::Value::Number((lhs.to_value()==rhs.to_value()) as i64),
+                let result = if matches!(lhs, Expr::Literal(_)) && matches!(rhs, Expr::Literal(_)) {
+                    match op.tok_type {
+                        crate::token::token_type::TokenType::Plus => Expr::Literal(lhs.to_value()+rhs.to_value()),
+                        crate::token::token_type::TokenType::Minus => Expr::Literal(lhs.to_value()-rhs.to_value()),
+                        crate::token::token_type::TokenType::Star => Expr::Literal(lhs.to_value()*rhs.to_value()),
+                        crate::token::token_type::TokenType::Slash => Expr::Literal(lhs.to_value()/rhs.to_value()),
+                        crate::token::token_type::TokenType::Less => Expr::Literal(Value::Value::Number((lhs.to_value()<rhs.to_value()) as i64)),
+                        crate::token::token_type::TokenType::Greater => Expr::Literal(Value::Value::Number((lhs.to_value()>rhs.to_value()) as i64)),
+                        crate::token::token_type::TokenType::LessEqual => Expr::Literal(Value::Value::Number((lhs.to_value()<=rhs.to_value()) as i64)),
+                        crate::token::token_type::TokenType::GreaterEqual => Expr::Literal(Value::Value::Number((lhs.to_value()>=rhs.to_value()) as i64)),
+                        crate::token::token_type::TokenType::EqualEqual => Expr::Literal(Value::Value::Number((lhs.to_value()==rhs.to_value()) as i64)),
                         _ => {
                             unimplemented!()
                         }
-                    };
-                }
+                    }
+                } else {
+                    Expr::Binary(Box::new(lhs), op.clone(),Box::new(rhs))
+                };
 
-                Expr::Literal(result).clone()
+                result
 
             },
             Expr::Unary(op, rhs) => {
@@ -93,7 +98,7 @@ impl<'a> Expr
                     _ => unimplemented!()
                 })
             },
-            Expr::VarDecl(_dt, _, _n, _init) => {
+            Expr::VarDecl(_,_,_,_,_) => {
                 Expr::None
             }
             Expr::Var(_) => self.clone(),
@@ -104,6 +109,7 @@ impl<'a> Expr
     pub fn to_value(&self) -> Value::Value {
         match self {
             Expr::Literal(v) => v.clone(),
+            Expr::List(l) => Value::Value::List(l.to_vec()),
             _ => Value::Value::Null
         }
     }
@@ -114,6 +120,15 @@ impl<'a> Expr
             _ => "".to_string()
         }
     }
+    pub fn get_function(&self) -> (String, Vec<(DataType, String)>, Box<Expr>, Option<DataType>) {
+        match self {
+            Expr::FuncStmt(s, v,body ,ret ) => {
+                (s.clone(),v.to_vec(),body.clone(),ret.clone())
+            }
+            _ => unimplemented!()
+        }
+    }
+
     pub fn to_datatype(&self) -> Result<DataType, String> {
         match self {
             Expr::Identifier(n) => {
@@ -124,7 +139,7 @@ impl<'a> Expr
                     "long" => Ok(DataType::Long),
                     "float" => Ok(DataType::Float),
                     "suu" => Ok(DataType::Suu),
-                    _ => Err(format!("Invaild data type {}", n)),
+                    _ => Ok(DataType::Unknown)
                 }
             }
             _ => Err(format!("Expr type expect to be identifier, got {:#?}", self))

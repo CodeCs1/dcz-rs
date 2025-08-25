@@ -1,4 +1,6 @@
-use crate::token::{token_type::TokenType, TokenData};
+use std::{collections::VecDeque, process::exit};
+
+use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::DataType};
 pub mod expr_node;
 pub mod ast_checker;
 use expr_node::Expr;
@@ -31,18 +33,20 @@ macro_rules! check_keyword {
 
 
 pub struct AST {
+    filename: String,
     token: Vec<TokenData>,
+    meta_data: MetaData,
     current: usize,
 }
 
 impl AST {
-    pub fn new(token: Vec<TokenData>) -> Self {
-        Self { token: token, current:0 }
+    pub fn new(meta_data: MetaData) -> Self {
+        Self { token: meta_data.clone().tok_data, current:0, filename: meta_data.clone().filename, meta_data: meta_data.clone() }
 
     }
     
     fn is_eof(&self) -> bool {
-        self.token[self.current].tok_type == TokenType::EOF
+        self.current >= self.token.len() || self.token[self.current].tok_type == TokenType::EOF 
     }
 
     fn peek(&self) -> TokenData {
@@ -97,12 +101,12 @@ impl AST {
             return Box::new(Expr::Identifier(self.previous().identifier));
         }
 
-        if self.match_token(&mut vec![TokenType::Identifier]) {
-            return Box::new(Expr::Var(self.previous().identifier));
+        if self.match_token(&mut vec![TokenType::LeftBracket]) {
+            return self.list();
         }
 
-        if self.match_token(&mut vec![TokenType::NewLine]) {
-            return Box::new(Expr::None);
+        if self.match_token(&mut vec![TokenType::Identifier]) {
+            return Box::new(Expr::Var(self.previous().identifier));
         }
 
         panic!("Expect Expression at {}:{} ({:?})", self.peek().line, self.peek().end, self.peek().tok_type);
@@ -170,7 +174,7 @@ impl AST {
     fn func_stmt(&mut self) -> Box<Expr> {
 
         /*
-         * func test(suu test_args) = suu {
+         * func test(suu test_args) -> suu {
          *  return 4;
          * }
          *
@@ -195,7 +199,7 @@ impl AST {
 
         self.consume(TokenType::RightParen, "Expect ')' in declare func");
 
-        let return_type = if self.match_token(&mut vec![TokenType::Equal]) {
+        let return_type = if self.match_token(&mut vec![TokenType::PointTo]) {
             Some(self.primary().to_datatype().expect("Invaild data type"))
         } else {
             None
@@ -208,8 +212,37 @@ impl AST {
         )
     }
 
+    fn list(&mut self) -> Box<Expr> {
+        let mut data_type = DataType::Unknown;
+        let mut l: Vec<Value> = Vec::new();
+        while !self.check(TokenType::RightBracket) {
+            let v = self.primary();
+            l.push(v.to_value());
+            if l.len() == 1 {
+                data_type=v.to_value().to_datatype();
+            }else {
+                if v.to_value().to_datatype() != data_type {
+                    let p = self.peek();
+                    throw_message(
+                        &self.filename, 
+                        crate::MessageHandler::message_handler::MessageType::Error,
+                        p.line as i64, p.start as i64, &format!("List item must be same as {:?}", data_type));
+                    exit(1);
+                }
+            }
+            if !self.check(TokenType::RightBracket) {
+                self.consume(TokenType::Comma, "Expect ',' in list item declaration");
+            }
+        }
+        self.consume(TokenType::RightBracket, "Expect ']' in list declaration");
+
+        Box::new (
+            Expr::List(l)
+        )
+    }
+
     fn statement(&mut self) -> Box<Expr> {
-        self.clear_newline();
+        
         if self.match_token(&mut vec![TokenType::LeftBrace]) {
             return self.block();
         }
@@ -273,10 +306,6 @@ impl AST {
 
         let mut block = Vec::new();
         while ! self.check(TokenType::RightBrace) && !self.is_eof() {
-            if self.check(TokenType::NewLine) {
-                self.advance();
-                continue;
-            }
             let st = *self.statement();
             block.push(st);
         }
@@ -286,37 +315,71 @@ impl AST {
         )
     }
 
-    fn clear_newline(&mut self) {
-        while self.check(TokenType::NewLine) {
-            self.advance();
-        }
-    }
-
 
     fn var_decl(&mut self) -> Box<Expr> {
         // char* a = "hello world";
+        // let a: const = 3;
         
         //check if current token is not data type
-        self.clear_newline();
+        
 
-        if self.peek().tok_type != TokenType::DataType {
+        if self.peek().tok_type != TokenType::DataType 
+        && self.peek().identifier != "let" 
+        && self.peek().identifier != "const" {
             return self.expr();
         }
-        let data_type = self.primary().to_datatype().expect("VarDecl");
+
+        let is_const = self.peek().identifier=="const";
+        
+        let mut data_type = if self.peek().tok_type == TokenType::DataType {
+            self.primary().to_datatype().expect("VarDecl")
+        } else {
+            self.advance();
+            DataType::Unknown
+        };
         let is_pointer = self.match_token(&mut vec![TokenType::Star]);
 
         let name = self.primary();
         if !matches!(*name, Expr::Var(_)) {
-            panic!("Invaild variable type");
+            let l =self.peek().line;
+            let p =self.peek().start;
+            throw_message(
+                "stdin", 
+                crate::MessageHandler::message_handler::MessageType::Error,
+                l as i64, p as i64,"Using keyword as variable name is forbidden!");
+            exit(1);
+        }
+
+        if self.peek().tok_type == TokenType::Colon {
+            if !matches!(data_type, DataType::Unknown) {
+                let l =self.peek().line;
+                let p =self.peek().start;
+                throw_message(
+                    &self.filename, 
+                    crate::MessageHandler::message_handler::MessageType::Error,
+                    l as i64, p as i64,&format!("Can't override to data type: {:?}\nFix this by using 'let' instead.", data_type));
+                exit(1);
+            }
+            self.advance();
+            data_type = self.primary().to_datatype().expect("VarDecl(override)");
         }
 
         let mut init = None;
 
         if self.match_token(&mut vec![TokenType::Equal]) {
-            init = Some(self.expr());
+            let i = self.expr();
+            if matches!(data_type, DataType::Unknown) {
+                let v = i.to_value();
+                data_type = if v.clone().is_char() { DataType::Char }
+                            else if v.clone().is_double() {DataType::Suu}
+                            else if v.clone().is_float() {DataType::Float}
+                            else if v.clone().is_literal() {DataType::Long}
+                            else {DataType::Unknown}
+            }
+            init = Some(i);
         }
         Box::new(
-            Expr::VarDecl(data_type, is_pointer, name.ident_to_string(), init)
+            Expr::VarDecl(data_type, is_pointer,is_const, name.ident_to_string(), init)
             )
     }
 
@@ -325,17 +388,21 @@ impl AST {
         let mut expr_vec: Vec<Expr> = Vec::new();
         
         while !self.is_eof() {
-
             if self.match_token(&mut vec![TokenType::Macro]) {
                 let mut vect: Vec<Expr> = Vec::new();
-                let macro_name = self.previous().identifier;
-                while !self.check(TokenType::NewLine) && !self.is_eof() {
-                    vect.push(*self.expr());
+                if let Some(st) = self.previous().sub_tok {
+                    let mut macro_queue = VecDeque::from(st);
+
+                    let macro_name = macro_queue.pop_front().unwrap();
+                    let mut sub_ast = AST::new(MetaData {filename: self.filename.clone(), tok_data: Vec::from(macro_queue), data: self.meta_data.data.clone()});
+                    while !sub_ast.is_eof() {
+                        vect.push(*sub_ast.expr());
+                    }
+                    expr_vec.push(Expr::Macro(macro_name.identifier, vect));
                 }
-                expr_vec.push(Expr::Macro(macro_name, vect));
             }
             else {
-                self.clear_newline();
+                
                 let expr = *self.statement();
                 match expr {
                     Expr::None => {}

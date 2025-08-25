@@ -1,6 +1,6 @@
 #![allow(non_snake_case)]
 
-use std::{fs::File, io::Read/*, iter::zip*/};
+use std::{fs::File, io::Read, path::Path/*, iter::zip*/};
 use clap::Parser;
 use codegen::codegen::Codegen;
 use object_out::ObjectOut;
@@ -38,14 +38,17 @@ struct Cmd {
 
 fn main() -> Result<(), Box<dyn std::error::Error>>{
     let args = Cmd::parse();
-    let mut file_content=String::new();
-    File::open(args.file)?.read_to_string(&mut file_content)?;
 
-    let mut t = Token::new(file_content.trim().to_string());
-    t.tokenize();
+    let file_path = Path::new(args.file.as_str());
 
-    let mut p=dcz_ast::new(t.tok_data);
+    let file_io=File::open(file_path)?;
+    let t = Token::FromIO(file_path,file_io);
+    let mut p=dcz_ast::new(t?.tokenize());
     let ast_tree = p.parse();
+    println!("{:?}", Checker::new(&ast_tree).check());
+    
+    /*
+
     let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(Checker::new(&ast_tree).check()?);
     let opcode_list = ast2ir.to_ir();
 
@@ -84,6 +87,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
 
     std::fs::write("output.o", obj.write_buff()).expect("Failed to save output.o");
 
-
+*/
     Ok(())
 }

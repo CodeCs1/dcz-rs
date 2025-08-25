@@ -14,6 +14,7 @@ pub enum MessageType {
     Error
 }
 
+
 impl Display for MessageType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s=match self {
@@ -25,7 +26,14 @@ impl Display for MessageType {
     }
 }
 
-
 pub fn throw_message(source_name: &str,message_type: MessageType, line: i64, pos: i64, message: &str) {
     eprintln!("{}: {}\nat {}", message_type, message, format!("{}:{}:{}", source_name,line,pos).bold())
+}
+
+#[macro_export]
+macro_rules! panic_error {
+    ($source: expr, $line: expr, $pos: expr, $message: expr) => {
+        throw_message($source, MessageType::Error, $line, $pos, $message);
+        exit(1)
+    };
 }

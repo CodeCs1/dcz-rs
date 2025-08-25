@@ -1,19 +1,20 @@
 #[cfg(test)]
 mod test {
-    use crate::{codegen::{ir::IrBuilder, ir_opcode::*}, token::{token_type::TokenType, Token, TokenData}, Value::Value};
+    use crate::{token::{token_type::TokenType, Token, TokenData}, Value::Value};
 
     #[test]
     fn tokenizer_test_simple() {
         let mut t = Token::new("(()".to_string());
-        t.tokenize();
-        assert_eq!(t.tok_data, vec![
+        let meta_data = t.tokenize();
+        assert_eq!(meta_data.tok_data, vec![
             TokenData {
                 tok_type: TokenType::LeftParen,
                 start:0,
                 end:1,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::LeftParen,
@@ -21,7 +22,8 @@ mod test {
                 end:2,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::RightParen,
@@ -29,7 +31,8 @@ mod test {
                 end: 3,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::EOF,
@@ -37,22 +40,24 @@ mod test {
                 end: 0,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             }
         ])
     }
     #[test] 
     fn tokenizer_test_string() {
         let mut t = Token::new("\"Hello World\"".to_string());
-        t.tokenize();
-        assert_eq!(t.tok_data, vec![
+        let meta_data = t.tokenize();
+        assert_eq!(meta_data.tok_data, vec![
             TokenData {
                 tok_type: TokenType::String,
                 start: 0,
                 end: 13,
                 identifier: "\"Hello World\"".to_string(),
                 line: 1,
-                value: Value::Str("Hello World".to_string())
+                value: Value::Str("Hello World".to_string()),
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::EOF,
@@ -60,22 +65,24 @@ mod test {
                 end: 0,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             }
         ])
     }
     #[test] 
     fn tokenizer_test_identifier_keyword() {
         let mut t = Token::new("abcxyz".to_string());
-        t.tokenize();
-        assert_eq!(t.tok_data, vec![
+        let meta_data1 = t.tokenize();
+        assert_eq!(meta_data1.tok_data, vec![
             TokenData {
                 tok_type: TokenType::Identifier,
                 start: 0,
                 end: 6,
                 identifier: "abcxyz".to_string(),
                 line: 1,
-                value: Value::Object("abcxyz".to_string())
+                value: Value::Object("abcxyz".to_string()),
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::EOF,
@@ -83,19 +90,21 @@ mod test {
                 end: 0,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             }
         ]);
         let mut t1 = Token::new("suu number".to_string());
-        t1.tokenize();
-        assert_eq!(t1.tok_data, vec![
+        let meta_data2 = t1.tokenize();
+        assert_eq!(meta_data2.tok_data, vec![
             TokenData {
                 tok_type: TokenType::DataType,
                 start: 0,
                 end: 3,
                 identifier: "suu".to_string(),
                 line: 1,
-                value: Value::Object("suu".to_string())
+                value: Value::Object("suu".to_string()),
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::Identifier,
@@ -103,7 +112,8 @@ mod test {
                 end: 10,
                 identifier: "number".to_string(),
                 line: 1,
-                value: Value::Object("number".to_string())
+                value: Value::Object("number".to_string()),
+                sub_tok: None
             },
             TokenData {
                 tok_type: TokenType::EOF,
@@ -111,7 +121,8 @@ mod test {
                 end: 0,
                 identifier: "".to_string(),
                 line: 1,
-                value: Value::Null
+                value: Value::Null,
+                sub_tok: None
             }
         ])
     }
