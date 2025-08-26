@@ -33,6 +33,7 @@ struct Cmd {
 
     #[arg(short, long, default_value_t='0')]
     ///Optimization flags
+    // It could be: (0: basic optimization)
     Optimization: char
 }
 
@@ -45,12 +46,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let t = Token::FromIO(file_path,file_io);
     let mut p=dcz_ast::new(t?.tokenize());
     let ast_tree = p.parse();
-    println!("{:?}", Checker::new(&ast_tree).check());
-    
-    /*
 
-    let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(Checker::new(&ast_tree).check()?);
-    let opcode_list = ast2ir.to_ir();
+    let mut c = Checker::new(&ast_tree);
+    println!("{:#?}", c.check()?);
+    /*
+    let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(c.check()?);
+    let opcode_list = ast2ir.to_ir();*/
+    /*
 
     if args.run {
         use VM::vm;

@@ -368,13 +368,15 @@ impl AST {
 
         if self.match_token(&mut vec![TokenType::Equal]) {
             let i = self.expr();
-            if matches!(data_type, DataType::Unknown) {
+            if matches!(data_type, DataType::Unknown) && matches!(*i, Expr::Literal(_)) {
                 let v = i.to_value();
-                data_type = if v.clone().is_char() { DataType::Char }
+                if !v.clone().is_null() {
+                    data_type = if v.clone().is_char() { DataType::Char }
                             else if v.clone().is_double() {DataType::Suu}
                             else if v.clone().is_float() {DataType::Float}
                             else if v.clone().is_literal() {DataType::Long}
                             else {DataType::Unknown}
+                }
             }
             init = Some(i);
         }

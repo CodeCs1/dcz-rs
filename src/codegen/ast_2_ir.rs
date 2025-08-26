@@ -1,11 +1,11 @@
 use std::sync::atomic::AtomicBool;
 
-use crate::AST::{ast_checker::FAST, expr_node::Expr};
+use crate::AST::expr_node::Expr;
 
 use super::{ir::{Ir, IrBuilder}, ir_opcode::{ConstantPool, Opcode}};
 
 pub struct Ast2Ir {
-    expr: Vec<FAST>,
+    expr: Vec<Expr>,
     pub const_pool: ConstantPool
 }
 
@@ -93,26 +93,25 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
         },
         Expr::FuncStmt(n, args , body,r_d) => {
             let mut v = Vec::new();
-            
-            let mut expr = visit_expr(*body);
+            let expr = visit_expr(*body);
 
             v.push(Opcode::MakeFunc(expr.len(),n));
 
             args.iter().for_each(|(d,n)| {
                 v.push(Opcode::StoreParam(d.clone(), n.clone()))
             });
-            v.append(&mut expr);
 
-            if let Some(_) = r_d {
-                //v.push(Opcode::Constant(crate::Value::Value::Number(0)));
-                let ret_last = expr.last();
-                if ret_last.is_some() {
-                    let r = ret_last.unwrap();
-                    if !matches!(r, Opcode::Return(_)) {
-                        v.push(Opcode::Invaild)
-                    }
-                } else {
-                    v.push(Opcode::Invaild);
+            v.append(&mut expr.clone());
+
+            let ret_last = &expr[expr.len()-2];
+
+            if r_d.is_some() {
+                if !matches!(ret_last, Opcode::Return(_)) {
+                    v.push(Opcode::Invaild)
+                }
+            } else {
+                if matches!(ret_last, Opcode::Return(_)) {
+                    v.push(Opcode::Invaild)
                 }
             }
 
@@ -152,8 +151,8 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
         e => todo!("This expr '{:?}' does not implemented yet.", e)
     }
 }
-impl Ast2Ir {
-    pub fn new(vect: Vec<FAST>) -> Self{
+impl Ast2Ir  {
+    pub fn new(vect: Vec<Expr>) -> Self{
         Ast2Ir { expr: vect, const_pool: ConstantPool::new() }
     }
 
@@ -161,7 +160,7 @@ impl Ast2Ir {
         let mut irb = IrBuilder::new();
 
         for x in self.expr.iter_mut() {
-            irb=irb.append_from_vec(&mut visit_expr(x.expr.clone()));
+            irb=irb.append_from_vec(&mut visit_expr(x.clone()));
         }
         self.const_pool = irb.get_const_pool();
 

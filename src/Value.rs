@@ -97,6 +97,49 @@ impl std::ops::Shl for Value {
         }
     }
 }
+impl std::ops::BitOr for Value {
+    type Output = Value;
+    fn bitor(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            if self.clone().to_literal() >= 0 && rhs.clone().to_literal() >= 0 {
+                Value::Number(self.to_literal() | rhs.to_literal())
+            } else {
+                panic!("[BITOR] It can only be applied for natural number")
+            }
+        } else {
+            panic!("[BITOR] It can only be applied for natural number")
+        }
+    }
+}
+
+impl std::ops::BitAnd for Value {
+    type Output = Value;
+    fn bitand(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            if self.clone().to_literal() >= 0 && rhs.clone().to_literal() >= 0 {
+                Value::Number(self.to_literal() & rhs.to_literal())
+            } else {
+                panic!("[BITOR] It can only be applied for natural number")
+            }
+        } else {
+            panic!("[BITOR] It can only be applied for natural number")
+        }
+    }
+}
+impl std::ops::BitXor for Value {
+    type Output = Value;
+    fn bitxor(self, rhs: Self) -> Self::Output {
+        if matches!(self, Value::Number(_)) && matches!(rhs, Value::Number(_)) {
+            if self.clone().to_literal() >= 0 && rhs.clone().to_literal() >= 0 {
+                Value::Number(self.to_literal() ^ rhs.to_literal())
+            } else {
+                panic!("[BITOR] It can only be applied for natural number")
+            }
+        } else {
+            panic!("[BITOR] It can only be applied for natural number")
+        }
+    }
+}
 
 impl std::ops::Shr for Value {
     type Output = Value;
@@ -121,6 +164,12 @@ impl std::ops::Div for Value {
                 panic!("[DIV] Division by 0");
             }
             Value::Number(self.to_literal()/rhs.to_literal())
+        }
+        else if matches!(self, Value::Float(_)) || matches!(rhs, Value::Float(_)) {
+            if self.clone().to_float() == 0.0 || rhs.clone().to_float() == 0.0 {
+                panic!("[DIV] Division by 0");
+            }
+            Value::Float(self.to_float()/rhs.to_float())
         }
         else {
             panic!("[DIV] Both value MUST Be integer or float.");
@@ -244,6 +293,10 @@ impl Value {
     pub fn to_string(self) -> String {
         //self.value().expect("null value").downcast_ref::<String>().unwrap().clone()
         get_cast_value!(self,String).clone()
+    }
+
+    pub fn is_null(self) -> bool {
+        matches!(self, Value::Null)
     }
 
     pub fn value(&self) -> Option<Box<dyn std::any::Any>> {

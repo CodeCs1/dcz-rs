@@ -26,7 +26,7 @@ impl DataType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone,PartialEq)]
 pub enum Expr {
     /// Binary Expression (Expr, Operator, Expr)
     Binary(Box<Expr>, TokenData, Box<Expr>),
@@ -79,6 +79,9 @@ impl<'a> Expr
                         crate::token::token_type::TokenType::LessEqual => Expr::Literal(Value::Value::Number((lhs.to_value()<=rhs.to_value()) as i64)),
                         crate::token::token_type::TokenType::GreaterEqual => Expr::Literal(Value::Value::Number((lhs.to_value()>=rhs.to_value()) as i64)),
                         crate::token::token_type::TokenType::EqualEqual => Expr::Literal(Value::Value::Number((lhs.to_value()==rhs.to_value()) as i64)),
+                        crate::token::token_type::TokenType::ShiftLeft => Expr::Literal(Value::Value::Number((lhs.to_value()<<rhs.to_value()).to_literal())),
+                        crate::token::token_type::TokenType::ShiftRight => Expr::Literal(Value::Value::Number((lhs.to_value()>>rhs.to_value()).to_literal())),
+                        crate::token::token_type::TokenType::Or => Expr::Literal(Value::Value::Number((lhs.to_value()|rhs.to_value()).to_literal())),
                         _ => {
                             unimplemented!()
                         }
@@ -103,6 +106,7 @@ impl<'a> Expr
             }
             Expr::Var(_) => self.clone(),
             Expr::Statement(st) => st.visit(),
+            Expr::Callee(_, _) => self.clone(),
             o => todo!("Expr visit does not implemented {:?} yet ", o)
         }
     }
