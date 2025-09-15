@@ -300,7 +300,7 @@ impl Token {
                 }
                 'a'..='z' | 'A'..='Z' | '_' => {
                     let kw = vec![
-                        //block code
+                        //keyword
                         "func",
                         "if",
                         "else",
@@ -318,7 +318,8 @@ impl Token {
                         "char",
                         "short",
                         "long",
-                        "const"
+                        "const",
+                        "void"
                     ];
 
                     while self.peek().is_alphanumeric() || self.peek() == '_' { self.advance(); }

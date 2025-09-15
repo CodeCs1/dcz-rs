@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, process::exit};
 
-use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::DataType};
+use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::{DataType, Func_Header}};
 pub mod expr_node;
 pub mod ast_checker;
 use expr_node::Expr;
@@ -171,18 +171,7 @@ impl AST {
         return Box::new(Expr::WhileStmt(expr, body));
     }
 
-    fn func_stmt(&mut self) -> Box<Expr> {
-
-        /*
-         * func test(suu test_args) -> suu {
-         *  return 4;
-         * }
-         *
-         * func no_return_type {
-         *  return 4;
-         * }
-         * */
-
+    fn func_header(&mut self) -> (Box<Expr>, Vec<(DataType,String)>, (bool, Option<DataType>)){
         let func_name = self.primary();
 
         self.consume(TokenType::LeftParen, "Expect '(' in declare func");
@@ -204,11 +193,38 @@ impl AST {
         } else {
             None
         };
+
+        let is_ptr = self.match_token(&mut vec![TokenType::Star]);
+
+        (func_name, arg_v, (is_ptr,return_type))
+    }
+
+    fn func_stmt(&mut self) -> Box<Expr> {
+
+        /*
+         * func test(suu test_args) -> suu {
+         *  return 4;
+         * }
+         *
+         * func test_ptr(suu test_args) -> suu* {
+         *  return (suu*)0x123;
+         * }
+         * */
+        let func_header = self.func_header();
+        
         self.consume(TokenType::LeftBrace, "Expect '{' in declare func");
         let body = self.block();
 
         Box::new(
-            Expr::FuncStmt(func_name.ident_to_string(), arg_v,body, return_type)
+            Expr::FuncStmt(
+                Func_Header { 
+                    name: func_header.0.ident_to_string(), 
+                    args: func_header.1, 
+                    return_type: func_header.2.1,
+                    is_ptr_dt: func_header.2.0
+                },
+                body
+            )
         )
     }
 
@@ -279,7 +295,28 @@ impl AST {
     }
 
     fn extern_func(&mut self) -> Box<Expr> {
-        todo!("Extern func not implemented yet")
+        //extern <func_header>;
+
+        if self.advance().identifier != "func" {
+            throw_message(&self.filename,
+                crate::MessageHandler::message_handler::MessageType::Error,
+                self.peek().line as i64, self.peek().start as i64, 
+            "extern declare must be start with 'func' keywords");
+            exit(1);
+        }
+
+        let func_header = self.func_header();
+
+        self.consume(TokenType::Semicolon, "Expect ';' after extern function");
+        
+        Box::new (
+            Expr::Extern(Func_Header {
+                name: func_header.0.ident_to_string(),
+                args: func_header.1,
+                return_type: func_header.2.1,
+                is_ptr_dt: func_header.2.0
+            })
+        )
     }
 
 
@@ -337,7 +374,7 @@ impl AST {
             self.advance();
             DataType::Unknown
         };
-        let is_pointer = self.match_token(&mut vec![TokenType::Star]);
+        let mut is_pointer = self.match_token(&mut vec![TokenType::Star]);
 
         let name = self.primary();
         if !matches!(*name, Expr::Var(_)) {
@@ -362,6 +399,7 @@ impl AST {
             }
             self.advance();
             data_type = self.primary().to_datatype().expect("VarDecl(override)");
+            is_pointer = self.match_token(&mut vec![TokenType::Star]);
         }
 
         let mut init = None;

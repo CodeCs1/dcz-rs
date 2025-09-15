@@ -8,6 +8,7 @@ use object_out::ObjectOut;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
 
+use crate::codegen::{llvm::Module, llvm_codegen::TypeValue};
 
 //use object_out::ObjectOut;
 
@@ -48,7 +49,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let ast_tree = p.parse();
 
     let mut c = Checker::new(&ast_tree);
-    println!("{:#?}", c.check()?);
+    let expr = c.check()?;
+    println!("{:#?}", expr);
+
+    let binding = Module::new("dcz".to_string());
+    let cg_c = codegen::llvm_codegen::LLVMCodegen::compile(expr, &binding);
+    let cg = cg_c.codegen_all();
+    for x in cg.iter() {
+        match x {
+            TypeValue::LLVMValue(v) => {
+                v.dump();
+            }
+            TypeValue::FnValue(f) => {
+                f.dump();
+            },
+            TypeValue::None => {}
+        }
+    }
+    
     /*
     let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(c.check()?);
     let opcode_list = ast2ir.to_ir();*/

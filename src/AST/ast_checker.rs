@@ -25,17 +25,38 @@ pub struct Checker<'a> {
 }
 
 
-fn check_literal_type(init: Option<Box<Expr>>, dt: DataType) -> (Option<Box<Expr>>, DataType) {
+fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) -> 
+    Result<(Option<Box<Expr>>, DataType, bool),String>
+    {
     let mut init_v =None;
 
     let mut data_type = dt.clone();
 
+    if matches!(data_type, DataType::Void) && !is_ptr {
+        return Err(format!("'void' cannot be used like normal datatype\nUse different data type or add '*' at the end of 'void' data type."));
+    }
+
     if let Some(mut v) = init {
         let mut v = v.visit();
 
-        if !matches!(v, Expr::Literal(_)) { return (Some(Box::new(v)), DataType::Unknown); }
+        if !matches!(v, Expr::Literal(_)) ||
+        (matches!(dt, DataType::Void) && is_ptr) { return Ok((Some(Box::new(v)), dt, is_ptr)); }
+
 
         let to_v= v.to_value();
+
+        if to_v.clone().is_string() {
+            if matches!(dt, DataType::Unknown) { // 'let' keyword
+                return Ok((Some(Box::new(v)), DataType::Char, true));
+            }
+            if !is_ptr {
+                return Err(format!("Cannot convert from {:?} to string literal (variable MUST be pointer and data type MUST be char)", data_type.clone()));
+            }
+            if is_ptr && !matches!(dt, DataType::Char) {
+                return Err(format!("Cannot convert from {:?}* to string literal (data type MUST be char)", dt.clone()));
+            }
+        }
+
         let vi64 = if to_v.clone().is_literal() {
             to_v.to_literal() as f64
         } else if to_v.clone().is_double() {
@@ -110,7 +131,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType) -> (Option<Box<Expr
         }
         init_v = Some(Box::new(v));
     }
-    (init_v,data_type)
+    Ok((init_v,data_type, is_ptr))
 }
 
 pub fn catch_error(r: Result<FAST, String>) -> FAST {
@@ -157,7 +178,15 @@ impl<'a> Checker<'a> {
             Expr::WhileStmt(_s, _r) => Ok(FAST { expr: e, is_used: true}),
 
             Expr::VarDecl(dt, is_p,is_const, n, init) => {
-                let (init_v,data_type) = check_literal_type(init, dt.clone());
+                let (init_v,data_type) = 
+                    match check_literal_type(init, dt.clone(), is_p) {
+                        Ok(v) => (v.0,v.1),
+                        Err(s) => {
+                            throw_message("source",
+                             MessageType::Error, 1,1 , s.as_str());
+                            exit(1);
+                        }
+                    };
 
                 if self.pseudo_variable_stack.iter().find(|f| {
                     f.name == n
@@ -182,18 +211,23 @@ impl<'a> Checker<'a> {
                     if assign.is_const {
                         return Err(format!("Constant variable '{}' cannot be assignable!", n));
                     }
-                    let init_v = check_literal_type(Some(v), assign.dt.clone()).0.unwrap();
+                    let init_v = 
+                        if let Ok(v) = check_literal_type(Some(v), assign.dt.clone(), assign.is_ptr) {
+                            v.0.unwrap()
+                        } else {
+                            exit(1);
+                        };
                     Ok(FAST { expr: Expr::Assign(n, init_v), is_used: true })
                 }
             }
 
             Expr::Literal(_v) => Ok(FAST { expr: e, is_used: true }),
-            Expr::FuncStmt(n, args, b, ret) => {
+            Expr::FuncStmt(f,body) => {
                 //self.visit(*b)
                 //add to pseudo_variable_stack
 
                 let f=FAST {
-                    expr: Expr::FuncStmt(n, args, Box::new(self.visit(*b)?.expr),ret),
+                    expr: Expr::FuncStmt(f, Box::new(self.visit(*body)?.expr)),
                     is_used: true
                 };
 
@@ -248,6 +282,22 @@ impl<'a> Checker<'a> {
                     expr: Expr::IfStmt(Box::new(cond.expr), Box::new(then_bl.expr), Box::new(else_bl.expr)),
                     is_used: true
                 })
+            }
+            Expr::Extern(b) => {
+                //add this into pseudo function stack (used by callee) 
+                self.pseudo_function_stack.push(
+                    FAST {
+                        expr: Expr::Extern(b.clone()),
+                        is_used: true
+                    }
+                );
+
+                Ok(
+                    FAST { 
+                        expr: e, //will be useful for AST2IR
+                        is_used: true 
+                    }
+                )
             }
             o => todo!("Expression {:?} does not implemented yet!", o)
         }

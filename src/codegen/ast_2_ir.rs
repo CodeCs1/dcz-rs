@@ -91,13 +91,13 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
 
             v
         },
-        Expr::FuncStmt(n, args , body,r_d) => {
+        Expr::FuncStmt(f, body) => {
             let mut v = Vec::new();
             let expr = visit_expr(*body);
 
-            v.push(Opcode::MakeFunc(expr.len(),n));
+            v.push(Opcode::MakeFunc(expr.len(),f.name));
 
-            args.iter().for_each(|(d,n)| {
+            f.args.iter().for_each(|(d,n)| {
                 v.push(Opcode::StoreParam(d.clone(), n.clone()))
             });
 
@@ -105,7 +105,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
 
             let ret_last = &expr[expr.len()-2];
 
-            if r_d.is_some() {
+            if f.return_type.is_some() {
                 if !matches!(ret_last, Opcode::Return(_)) {
                     v.push(Opcode::Invaild)
                 }

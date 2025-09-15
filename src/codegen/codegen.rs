@@ -127,7 +127,7 @@ impl Codegen {
                             qword_ptr(rbp-param_offset)
                             //qword_ptr(rbp)
                         }
-                        DataType::Unknown => todo!()
+                        _ => todo!()
                     };
 
                     if instr.bitness() == 64 {
@@ -179,7 +179,7 @@ impl Codegen {
                             qword_ptr(rbp-local_pad_offset)
                             //qword_ptr(rbp)
                         }
-                        DataType::Unknown => todo!()
+                        _ => todo!()
                     };
 
                     let v = value.clone().as_value();

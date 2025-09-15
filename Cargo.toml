@@ -1,6 +1,6 @@
 [package]
 name = "dcz"
-version = "0.1.0"
+version = "0.1.0-nightly"
 edition = "2024"
 
 [dependencies]
@@ -8,3 +8,6 @@ clap = { version="4.5.40", features=["derive"] }
 iced-x86 = { version="1.21.0", features=["code_asm"] }
 object = { version="0.37.1", features=["build", "write"] }
 colored = "3.0.0"
+
+llvm-sys-201 = { package = "llvm-sys", version = "201" }
+libc = "0.2.175"

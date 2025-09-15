@@ -11,6 +11,7 @@ pub enum DataType {
     Long,
     Float,
     Suu, // replace for double data type
+    Void,
     Unknown
 }
 
@@ -24,6 +25,14 @@ impl DataType {
             _ => 0
         }
     }
+}
+
+#[derive(Debug, Clone,PartialEq)]
+pub struct Func_Header {
+    pub name: String,
+    pub args: Vec<(DataType,String)>,
+    pub return_type: Option<DataType>,
+    pub is_ptr_dt: bool
 }
 
 #[derive(Debug, Clone,PartialEq)]
@@ -43,15 +52,16 @@ pub enum Expr {
     IfStmt(Box<Expr>, Box<Expr>, Box<Expr>),
     WhileStmt(Box<Expr>, Box<Expr>),
     /// FuncStmt(name, args, body, return_type)
-    FuncStmt(String, Vec<(DataType, String)>, Box<Expr>, Option<DataType>),
+    FuncStmt(Func_Header, Box<Expr>),
     Callee(Box<Expr>, Vec<Expr>),
 
     /// Var declare Statement VarDecl(dt, is_pointer, is_constant, name, initializer)
     VarDecl(DataType, bool, bool, String, Option<Box<Expr>>),
-
     List(Vec<Value::Value>),
-
     Return(Option<Box<Expr>>),
+
+    /// Extern declare statement
+    Extern(Func_Header),
 
     None
 }
@@ -126,8 +136,17 @@ impl<'a> Expr
     }
     pub fn get_function(&self) -> (String, Vec<(DataType, String)>, Box<Expr>, Option<DataType>) {
         match self {
-            Expr::FuncStmt(s, v,body ,ret ) => {
-                (s.clone(),v.to_vec(),body.clone(),ret.clone())
+            Expr::FuncStmt(func_header, body ) => {
+                (func_header.name.clone(),
+                 func_header.args.clone(),
+                body.clone(),
+                func_header.return_type.clone())
+            }
+            Expr::Extern(f) => {
+                (f.name.clone(),
+                f.args.clone(),
+                Box::new(Expr::None),
+                f.return_type.clone())
             }
             _ => unimplemented!()
         }
@@ -143,6 +162,7 @@ impl<'a> Expr
                     "long" => Ok(DataType::Long),
                     "float" => Ok(DataType::Float),
                     "suu" => Ok(DataType::Suu),
+                    "void" => Ok(DataType::Void),
                     _ => Ok(DataType::Unknown)
                 }
             }

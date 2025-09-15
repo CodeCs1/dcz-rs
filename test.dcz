@@ -1,5 +1,8 @@
+##
+    Extern is now support!!!!
+##
+extern func exit(int status);
+
 func main() -> int {
     return 0;
 }
-
-let k = main();
