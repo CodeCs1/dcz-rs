@@ -171,7 +171,7 @@ impl AST {
         return Box::new(Expr::WhileStmt(expr, body));
     }
 
-    fn func_header(&mut self) -> (Box<Expr>, Vec<(DataType,String)>, (bool, Option<DataType>)){
+    fn func_header(&mut self) -> (Box<Expr>, Vec<(DataType,String,bool)>, (bool, Option<DataType>)){
         let func_name = self.primary();
 
         self.consume(TokenType::LeftParen, "Expect '(' in declare func");
@@ -179,8 +179,9 @@ impl AST {
 
         while !self.check(TokenType::RightParen) {
             let dt = self.primary().to_datatype().expect("Expect data type - FuncStmt");
+            let is_ptr = self.match_token(&mut vec![TokenType::Star]);
             let name = self.primary().ident_to_string();
-            arg_v.push((dt, name));
+            arg_v.push((dt, name, is_ptr));
             if !self.check(TokenType::RightParen) {
                 self.consume(TokenType::Comma, "Expect ',' in arguments declare");
             }
@@ -219,7 +220,7 @@ impl AST {
             Expr::FuncStmt(
                 Func_Header { 
                     name: func_header.0.ident_to_string(), 
-                    args: func_header.1, 
+                    args: func_header.1,
                     return_type: func_header.2.1,
                     is_ptr_dt: func_header.2.0
                 },

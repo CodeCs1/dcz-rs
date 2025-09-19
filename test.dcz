@@ -1,8 +1,7 @@
-##
-    Extern is now support!!!!
-##
-extern func exit(int status);
+# A basic script that print hello world
+extern func printf(char* str);
 
 func main() -> int {
+    printf("Hello world from dcz programming language!!!\n");
     return 0;
 }

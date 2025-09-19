@@ -97,7 +97,7 @@ fn visit_expr(e: Expr) ->Vec<Opcode> {
 
             v.push(Opcode::MakeFunc(expr.len(),f.name));
 
-            f.args.iter().for_each(|(d,n)| {
+            f.args.iter().for_each(|(d,n,_)| {
                 v.push(Opcode::StoreParam(d.clone(), n.clone()))
             });
 

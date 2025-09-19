@@ -3,11 +3,11 @@
 use std::{ffi::{CStr, CString}, marker::PhantomData, ops::Deref};
 
 use llvm_sys_201::{
-    analysis::LLVMVerifyFunction, core::*, prelude::*, LLVMTypeKind, LLVMValueKind
+    analysis::LLVMVerifyFunction, core::*, prelude::*, target::LLVMSetModuleDataLayout, target_machine::LLVMOpaqueTargetMachine, LLVMTypeKind, LLVMValueKind
 };
 
 pub struct Module {
-    module: LLVMModuleRef,
+    pub module: LLVMModuleRef,
     ctx: LLVMContextRef
 }
 
@@ -26,6 +26,13 @@ unsafe extern "C" {
         NumArgs: ::libc::c_uint,
         Name: *const ::libc::c_char,
     ) -> LLVMValueRef;
+
+    fn LLVMBuildLoad2(
+        arg1: LLVMBuilderRef,
+        Ty: Type<'_>,
+        PointerVal: LlvmValue<'_>,
+        Name: *const ::libc::c_char
+    ) -> LLVMValueRef;
 }
 
 
@@ -33,12 +40,24 @@ impl<'llvm> Module {
     pub fn new(module_name: String) -> Self {
         let (ctx,module) = unsafe {
             let c = LLVMContextCreate();
-            let m = LLVMModuleCreateWithNameInContext(module_name.as_ptr().cast(), c);
+            let m = LLVMModuleCreateWithNameInContext(
+                CString::new(module_name).expect("cstring failed").as_ptr()
+            , c);
             assert!(!c.is_null() && !m.is_null());
             (c,m)
         };
 
         Module { module: module, ctx: ctx }
+    }
+    pub fn set_data_layout(&self,  target: *mut LLVMOpaqueTargetMachine) {
+        unsafe {
+            LLVMSetModuleDataLayout(
+                self.module, 
+                llvm_sys_201::target_machine::LLVMCreateTargetDataLayout(
+                    target
+                )
+            );
+        }
     }
     pub fn dump(&self) {
         unsafe {
@@ -52,6 +71,12 @@ impl<'llvm> Module {
         Type::new(t_ref)
     }
 
+    pub fn type_char(&self) -> Type<'llvm> {
+        let t_ref = unsafe {
+            LLVMInt8TypeInContext(self.ctx)
+        };
+        Type::new(t_ref)
+    }
     pub fn type_i64(&self) -> Type<'llvm> {
         self.type_u64()
     }
@@ -137,9 +162,24 @@ impl<'llvm> Type<'llvm> {
     fn kind(&self) -> LLVMTypeKind {
         unsafe { LLVMGetTypeKind(self.0) }
     }
+    pub fn to_pointer(&mut self) {
+        unsafe {
+            self.0 = LLVMPointerType(self.0, 0);
+        }
+    }
 
     pub fn dump(&self) {
         unsafe { LLVMDumpType(self.0) };
+    }
+    pub fn const_char(self, c: char) -> LlvmValue<'llvm> {
+        debug_assert_eq!(
+            self.kind(),
+            LLVMTypeKind::LLVMIntegerTypeKind,
+            "Expected a char type when creating const char value!"
+        );
+
+        let value_ref = unsafe { LLVMConstInt(self.0, c as u64, 1) };
+        LlvmValue::new(value_ref)
     }
     pub fn const_f64(self, n: f64) -> LlvmValue<'llvm> {
         debug_assert_eq!(
@@ -222,6 +262,41 @@ impl <'llvm>Builder<'llvm> {
 
         LlvmValue::new(value_ref)
     }
+    pub fn global_string(&self, raw_str: &str) -> LlvmValue<'llvm> {
+        let v = unsafe {
+            LLVMBuildGlobalString(self.builder,
+                CString::new(raw_str).expect("cstring failed").as_ptr(), 
+                b"str\0".as_ptr().cast())
+        };
+        assert!(!v.is_null());
+        LlvmValue::new(v)
+    }
+    pub fn alloca(&self, Types: Type<'llvm>, name: &str) -> LlvmValue<'llvm> {
+        let v = unsafe {
+            LLVMBuildAlloca(self.builder, Types.0,CString::new(name).expect("cstring failed").as_ptr())
+        };
+        LlvmValue::new(v)
+    }
+    pub fn store(&self, value: LlvmValue<'llvm>, ptr: LlvmValue<'llvm>) -> LlvmValue<'llvm> {
+        let v = unsafe {
+            LLVMBuildStore(self.builder, value.value_ref(), ptr.value_ref())
+        };
+        assert!(!v.is_null());
+        LlvmValue::new(v)
+    }
+
+    pub fn load(&self, name: &str, ty: Type<'llvm>, ptr: LlvmValue<'llvm>) -> LlvmValue<'llvm> {
+        let v = unsafe {
+            LLVMBuildLoad2(
+                self.builder,
+                ty,
+                ptr,
+                CString::new(name).expect("cstring failed").as_ptr()
+            )
+        };
+        assert!(!v.is_null());
+        LlvmValue::new(v)
+    }
 
     pub fn ret(&self, ret: LlvmValue<'llvm>) -> LlvmValue<'llvm> {
         let v = unsafe {
@@ -230,7 +305,14 @@ impl <'llvm>Builder<'llvm> {
         assert!(!v.is_null());
         LlvmValue::new(v)
     }
-    pub fn call(&self, fn_value: FnValue<'llvm>, args: &mut[LlvmValue<'llvm>]) -> LlvmValue<'llvm> {
+    pub fn retvoid(&self) -> LlvmValue<'llvm> {
+        let v = unsafe {
+            LLVMBuildRetVoid(self.builder)
+        };
+        assert!(!v.is_null());
+        LlvmValue::new(v)
+    }
+    pub fn call(&self, fn_value: FnValue<'llvm>, args: &mut[LlvmValue<'llvm>], name: &str) -> LlvmValue<'llvm> {
         let value_ref = unsafe {
             LLVMBuildCall2(
                 self.builder,
@@ -238,7 +320,7 @@ impl <'llvm>Builder<'llvm> {
                 fn_value,
                 args.as_mut_ptr(),
                 args.len() as libc::c_uint,
-                b"call\0".as_ptr().cast(),
+                name.as_bytes().as_ptr().cast()
             )
         };
         LlvmValue::new(value_ref)
@@ -260,7 +342,7 @@ impl Drop for Builder<'_> {
 #[derive(Copy, Clone)]
 pub struct BasicBlock<'llvm>(LLVMBasicBlockRef, PhantomData<&'llvm ()>);
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone,Debug)]
 #[repr(transparent)]
 pub struct LlvmValue<'llvm>(LLVMValueRef, PhantomData<&'llvm ()>);
 
@@ -302,7 +384,7 @@ impl <'llvm>LlvmValue<'llvm> {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 #[repr(transparent)]
 pub struct FnValue<'llvm>(LlvmValue<'llvm>);
 

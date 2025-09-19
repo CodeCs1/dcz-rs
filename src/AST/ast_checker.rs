@@ -1,6 +1,8 @@
+use crate::AST::expr_node::Func_Header;
 use crate::{panic_error, MessageHandler::message_handler, Value::Value};
 use crate::MessageHandler::message_handler::{throw_message, MessageType};
 use super::expr_node::{DataType, Expr};
+use std::collections::HashMap;
 use std::process::exit;
 
 #[derive(Debug, Clone,PartialEq)]
@@ -21,8 +23,10 @@ struct VariableData {
 pub struct Checker<'a> {
     ast: &'a Vec<Expr>,
     pseudo_variable_stack: Vec<VariableData>, // DataType, Name, is_const, is_ptr, init_v
-    pseudo_function_stack: Vec<FAST>
+    pseudo_function_stack: Vec<FAST>,
+    extern_function_stack: HashMap<String, Func_Header>
 }
+
 
 
 fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) -> 
@@ -146,7 +150,12 @@ pub fn catch_error(r: Result<FAST, String>) -> FAST {
 impl<'a> Checker<'a> {
 
     pub fn new(ast: &'a Vec<Expr>) -> Self {
-        Self { ast: ast, pseudo_variable_stack: Vec::new(), pseudo_function_stack: Vec::new() }
+        Self { 
+            ast: ast, 
+            pseudo_variable_stack: Vec::new(), 
+            pseudo_function_stack: Vec::new(),
+            extern_function_stack: HashMap::new()
+        }
     }
 
     fn visit(&mut self, expr: Expr) -> Result<FAST, String> {
@@ -156,11 +165,14 @@ impl<'a> Checker<'a> {
             // bypass checking
             Expr::Return(_v) => Ok(FAST { expr: e, is_used: true }),
             Expr::Callee(n, _e) => {
+                
                 if !self.pseudo_function_stack.iter().any(|f| {
                     let func = f.expr.get_function();
                     n.ident_to_string() == func.0
                 }) {
-                    return Err(format!("Function '{}' not declared!", n.ident_to_string()));
+                    if !self.extern_function_stack.contains_key(&n.ident_to_string()) {
+                        return Err(format!("Function '{}' not declared!", n.ident_to_string()));
+                    }
                 }
 
                 Ok(FAST {expr: e, is_used: true})
@@ -170,7 +182,7 @@ impl<'a> Checker<'a> {
                     f.name == n
                 }) {
                     self.pseudo_variable_stack[idx].is_used = true;
-                    Ok(FAST { expr: self.pseudo_variable_stack[idx].init.clone(), is_used: true })
+                    Ok(FAST { expr:e, is_used: true }) // let codegen do the rest
                 } else {
                     Err(format!("Variable '{}' not declared!", n))
                 }
@@ -285,16 +297,12 @@ impl<'a> Checker<'a> {
             }
             Expr::Extern(b) => {
                 //add this into pseudo function stack (used by callee) 
-                self.pseudo_function_stack.push(
-                    FAST {
-                        expr: Expr::Extern(b.clone()),
-                        is_used: true
-                    }
-                );
+                
+                self.extern_function_stack.insert(b.clone().name, b);
 
                 Ok(
                     FAST { 
-                        expr: e, //will be useful for AST2IR
+                        expr:e, //will be useful for AST2IR
                         is_used: true 
                     }
                 )
@@ -309,11 +317,13 @@ impl<'a> Checker<'a> {
             catch_error(self.visit(f.clone()))).collect::<Vec<FAST>>();
 
         for func_f in &self.pseudo_function_stack {
-            if let Some(idx) = original_fast.iter().position(|f|{
-                f.expr.get_function().0 == func_f.expr.get_function().0
-            }) {
-                original_fast[idx] = func_f.clone();
-            }
+            original_fast.iter().find(|f| {
+                if matches!(f.expr, Expr::FuncStmt(_, _)) {
+                    f.expr.get_function().0 == func_f.expr.get_function().0
+                } else {
+                    false
+                }
+            }).replace(&func_f.clone());
         }
 
         for var_decl in &self.pseudo_variable_stack {

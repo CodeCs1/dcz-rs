@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+pub mod llvm_object;
+
 use std::sync::atomic::AtomicU64;
 
 use object::{write::{Object, Relocation, Symbol, SymbolId}};

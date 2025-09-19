@@ -8,7 +8,7 @@ use object_out::ObjectOut;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
 
-use crate::codegen::{llvm::Module, llvm_codegen::TypeValue};
+use crate::{codegen::{llvm::Module, llvm_codegen::TypeValue}, object_out::llvm_object};
 
 //use object_out::ObjectOut;
 
@@ -35,13 +35,32 @@ struct Cmd {
     #[arg(short, long, default_value_t='0')]
     ///Optimization flags
     // It could be: (0: basic optimization)
-    Optimization: char
+    Optimization: char,
+
+    #[arg(short, default_value="x64")]
+    Architecture: String
+}
+
+#[derive(Debug, Clone)]
+enum ObjectArch {
+    X16,
+    X32,
+    X64
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>>{
     let args = Cmd::parse();
 
     let file_path = Path::new(args.file.as_str());
+
+    let arch = {
+        match args.Architecture.as_str() {
+            "x16" => ObjectArch::X16,
+            "x32" => ObjectArch::X32,
+            "x64" => ObjectArch::X64,
+            _ => { return Err(format!("No architecture found: {:?}!", args.Architecture).into()); }
+        }
+    };
 
     let file_io=File::open(file_path)?;
     let t = Token::FromIO(file_path,file_io);
@@ -52,20 +71,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let expr = c.check()?;
     println!("{:#?}", expr);
 
-    let binding = Module::new("dcz".to_string());
+    let binding = Module::new(args.file);
     let cg_c = codegen::llvm_codegen::LLVMCodegen::compile(expr, &binding);
-    let cg = cg_c.codegen_all();
-    for x in cg.iter() {
-        match x {
-            TypeValue::LLVMValue(v) => {
-                v.dump();
-            }
-            TypeValue::FnValue(f) => {
-                f.dump();
-            },
-            TypeValue::None => {}
-        }
-    }
+    cg_c.codegen_all();
+    cg_c.get_module().dump();
+
+    llvm_object::LLVMObject::new(cg_c.get_module(), arch).ir2obj();
+
     
     /*
     let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(c.check()?);

@@ -30,7 +30,7 @@ impl DataType {
 #[derive(Debug, Clone,PartialEq)]
 pub struct Func_Header {
     pub name: String,
-    pub args: Vec<(DataType,String)>,
+    pub args: Vec<(DataType,String,bool)>,
     pub return_type: Option<DataType>,
     pub is_ptr_dt: bool
 }
@@ -134,7 +134,7 @@ impl<'a> Expr
             _ => "".to_string()
         }
     }
-    pub fn get_function(&self) -> (String, Vec<(DataType, String)>, Box<Expr>, Option<DataType>) {
+    pub fn get_function(&self) -> (String, Vec<(DataType, String,bool)>, Box<Expr>, Option<DataType>) {
         match self {
             Expr::FuncStmt(func_header, body ) => {
                 (func_header.name.clone(),
@@ -148,7 +148,7 @@ impl<'a> Expr
                 Box::new(Expr::None),
                 f.return_type.clone())
             }
-            _ => unimplemented!()
+            e => unimplemented!("{:?}", e)
         }
     }
 

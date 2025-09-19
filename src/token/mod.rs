@@ -200,7 +200,7 @@ impl Token {
                 ',' => Some(self.ToTokenData_Symbol(TokenType::Comma)),
                 '#' => {
                     if self.match_chr('#') {
-                        while self.match_str("##") && ! self.is_eof() {
+                        while !self.match_str("##") && ! self.is_eof() {
                             if self.peek() == '\n' { self.line+=1; }
                             self.advance();
                         }
