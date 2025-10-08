@@ -52,7 +52,7 @@ impl<'llvm> Module {
     pub fn set_data_layout(&self,  target: *mut LLVMOpaqueTargetMachine) {
         unsafe {
             LLVMSetModuleDataLayout(
-                self.module, 
+                self.module,
                 llvm_sys_201::target_machine::LLVMCreateTargetDataLayout(
                     target
                 )
@@ -115,7 +115,7 @@ impl<'llvm> Module {
         let t_ref = unsafe {
             LLVMFunctionType(
                 ret,
-                args.as_mut_ptr(), 
+                args.as_mut_ptr(),
                 args.len() as libc::c_uint,
                 0)
         };
@@ -131,12 +131,20 @@ impl<'llvm> Module {
     pub fn new_basic_block(&'llvm self, fn_v: FnValue<'llvm>) -> BasicBlock<'llvm> {
         let bl = unsafe {
             LLVMAppendBasicBlockInContext(
-                self.ctx, 
-                fn_v.value_ref(), 
+                self.ctx,
+                fn_v.value_ref(),
                 b"block\0".as_ptr().cast())
         };
         assert!(!bl.is_null());
         BasicBlock(bl, PhantomData)
+    }
+    pub fn create_basic_block(&self, name: &str) -> BasicBlock<'llvm> {
+        let bl = unsafe {
+            LLVMCreateBasicBlockInContext(self.ctx,
+            CString::new(name).expect("cstring failed").as_ptr())
+        };
+        assert!(!bl.is_null());
+        BasicBlock::new(bl)
     }
 }
 
@@ -206,6 +214,13 @@ impl<'llvm> Type<'llvm> {
         LlvmValue::new(v_ref)
     }
 
+    pub fn const_ptr_null(self) -> LlvmValue<'llvm> {
+        let v_ref = unsafe {
+            LLVMConstPointerNull(self.0)
+        };
+        LlvmValue::new(v_ref)
+    }
+
     pub fn const_u64(self, n:u64) -> LlvmValue<'llvm> {
         debug_assert_eq!(
             self.kind(),
@@ -262,10 +277,42 @@ impl <'llvm>Builder<'llvm> {
 
         LlvmValue::new(value_ref)
     }
+    pub fn cond_br(&self, cond: LlvmValue<'llvm>, then_bb: BasicBlock<'llvm>, else_bb: BasicBlock<'llvm>) {
+        let br = unsafe {
+            LLVMBuildCondBr(self.builder,
+                cond.value_ref(),
+                then_bb.0,
+                else_bb.0)
+        };
+        assert!(!br.is_null());
+    }
+    pub fn br(&self, dest: BasicBlock<'llvm>) {
+        let br_ref = unsafe { LLVMBuildBr(self.builder, dest.0) };
+        assert!(!br_ref.is_null());
+    }
+
+    pub fn append_phi_node(&self, phi_type: Type<'llvm>, incoming: &[(LlvmValue<'llvm>, BasicBlock<'llvm>)]) -> PhiValue<'llvm> {
+        let phi_ref = unsafe {
+            LLVMBuildPhi(self.builder, phi_type.0, b"phinode\0".as_ptr().cast())
+        };
+        for (val, bb) in incoming {
+           debug_assert_eq!(
+               val.type_of().kind(),
+               phi_type.kind(),
+               "Type of incoming phi value must be the same as the type used to build the phi node."
+           );
+           unsafe {
+               LLVMAddIncoming(phi_ref, &mut val.value_ref() as _,  bb.0 as _, 1);
+           }
+        }
+        PhiValue::new(phi_ref)
+    }
+
+
     pub fn global_string(&self, raw_str: &str) -> LlvmValue<'llvm> {
         let v = unsafe {
             LLVMBuildGlobalString(self.builder,
-                CString::new(raw_str).expect("cstring failed").as_ptr(), 
+                CString::new(raw_str).expect("cstring failed").as_ptr(),
                 b"str\0".as_ptr().cast())
         };
         assert!(!v.is_null());
@@ -282,6 +329,19 @@ impl <'llvm>Builder<'llvm> {
             LLVMBuildStore(self.builder, value.value_ref(), ptr.value_ref())
         };
         assert!(!v.is_null());
+        LlvmValue::new(v)
+    }
+
+    pub fn cmp(&self, lhs: LlvmValue<'llvm>, op: llvm_sys_201::LLVMIntPredicate, rhs: LlvmValue<'llvm>) -> LlvmValue<'llvm> {
+        let v = unsafe {
+            LLVMBuildICmp(
+                self.builder,
+                op,
+                lhs.value_ref(),
+                rhs.value_ref(),
+                b"icmp\0".as_ptr().cast()
+            )
+        };
         LlvmValue::new(v)
     }
 
@@ -311,6 +371,13 @@ impl <'llvm>Builder<'llvm> {
         };
         assert!(!v.is_null());
         LlvmValue::new(v)
+    }
+    pub fn get_insert_block(&self) -> BasicBlock<'llvm> {
+        let bb_ref = unsafe {
+            LLVMGetInsertBlock(self.builder)
+        };
+        assert!(!bb_ref.is_null());
+        BasicBlock::new(bb_ref)
     }
     pub fn call(&self, fn_value: FnValue<'llvm>, args: &mut[LlvmValue<'llvm>], name: &str) -> LlvmValue<'llvm> {
         let value_ref = unsafe {
@@ -342,6 +409,23 @@ impl Drop for Builder<'_> {
 #[derive(Copy, Clone)]
 pub struct BasicBlock<'llvm>(LLVMBasicBlockRef, PhantomData<&'llvm ()>);
 
+impl<'llvm> BasicBlock<'llvm> {
+    pub fn new(bb_ref: LLVMBasicBlockRef) -> Self {
+        assert!(!bb_ref.is_null());
+        BasicBlock(bb_ref, PhantomData)
+    }
+    #[inline]
+    pub fn bb_ref(&self) -> LLVMBasicBlockRef {
+        self.0
+    }
+    pub fn get_parent(&self) -> FnValue<'llvm> {
+        let value_ref = unsafe { LLVMGetBasicBlockParent(self.bb_ref()) };
+        assert!(!value_ref.is_null());
+
+        FnValue::new(value_ref)
+    }
+}
+
 #[derive(Copy, Clone,Debug)]
 #[repr(transparent)]
 pub struct LlvmValue<'llvm>(LLVMValueRef, PhantomData<&'llvm ()>);
@@ -357,9 +441,16 @@ impl <'llvm>LlvmValue<'llvm> {
         self.0
     }
 
+    fn change2(&self, new: LlvmValue<'llvm>) {
+    }
+
 
     fn kind(&self) -> LLVMValueKind {
         unsafe { LLVMGetValueKind(self.value_ref()) }
+    }
+    pub fn type_of(&self) -> Type<'llvm> {
+        let type_ref = unsafe { LLVMTypeOf(self.value_ref()) };
+        Type::new(type_ref)
     }
     pub fn dump(&self) {
         unsafe { LLVMDumpValue(self.value_ref()) };
@@ -380,6 +471,10 @@ impl <'llvm>LlvmValue<'llvm> {
         // TODO: Does this string live for the time of the LLVM context?!
         name.to_str()
             .expect("Expected valid UTF8 string from LLVM API")
+    }
+    pub(super) fn is_phinode(&self) -> bool {
+        let cast = unsafe { LLVMIsAPHINode(self.value_ref()) };
+        !cast.is_null()
     }
 }
 
@@ -415,6 +510,11 @@ impl <'llvm>FnValue<'llvm> {
         };
         Type::new(type_ref)
     }
+    pub fn append_basic_block(&self, bb: BasicBlock<'llvm>) {
+        unsafe {
+            LLVMAppendExistingBasicBlock(self.value_ref(), bb.0);
+        }
+    }
     pub fn verify(&self) -> bool {
         unsafe {
             LLVMVerifyFunction(
@@ -432,5 +532,44 @@ impl <'llvm>FnValue<'llvm> {
     }
     pub fn basic_blocks(&self) -> usize {
         unsafe { LLVMCountBasicBlocks(self.value_ref()) as usize }
+    }
+}
+
+#[derive(Copy, Clone)]
+#[repr(transparent)]
+pub struct PhiValue<'llvm>(LlvmValue<'llvm>);
+impl<'llvm> Deref for PhiValue<'llvm> {
+    type Target = LlvmValue<'llvm>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'llvm> PhiValue<'llvm> {
+    pub(super) fn new(value_ref: LLVMValueRef) -> Self {
+        let value = LlvmValue::new(value_ref);
+        debug_assert!(
+            value.is_phinode(),
+            "Expected a phinode value when constructing PhiValue!"
+        );
+
+        PhiValue(value)
+    }
+
+    pub fn add_incoming(&self, ival: LlvmValue<'llvm>, ibb: BasicBlock<'llvm>) {
+        debug_assert_eq!(
+            ival.type_of().kind(),
+            self.type_of().kind(),
+            "Type of incoming phi value must be the same as the type used to build the phi node."
+        );
+
+        unsafe {
+            LLVMAddIncoming(
+                self.value_ref(),
+                &mut ival.value_ref() as _,
+                ibb.0 as _,
+                1,
+            );
+        }
     }
 }

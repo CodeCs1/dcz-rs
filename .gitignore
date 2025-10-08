@@ -2,3 +2,4 @@ target
 gitpush.sh
 *.o
 Cargo.lock
+test

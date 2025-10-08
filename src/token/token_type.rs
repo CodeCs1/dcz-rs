@@ -38,5 +38,52 @@ pub enum TokenType {
     AndBool,
     OrBool,
     PointTo,
+
+    PlusEqual,
+    MinusEqual,
+    StarEqual,
+    SlashEqual,
+    PlusPlus,
+    MinusMinus,
+
     EOF
+}
+
+impl TokenType {
+    pub fn from(c: &[char]) -> Self {
+        match c {
+            ['-', '>'] => TokenType::PointTo,
+            ['-', '='] => TokenType::MinusEqual,
+            ['-', ' '] | ['-'] => TokenType::Minus,
+
+            ['+', '='] => TokenType::PlusEqual,
+            ['+', '+'] => TokenType::PlusPlus,
+            ['+', ' '] | ['+'] => TokenType::Plus,
+
+            ['*', '='] => TokenType::StarEqual,
+            ['*', ' '] | ['*'] => TokenType::Star,
+
+            ['/', '='] => TokenType::SlashEqual,
+            ['/', ' '] | ['/'] => TokenType::Slash,
+
+            ['=', '='] => TokenType::EqualEqual,
+            ['=', ' '] | ['='] => TokenType::Equal,
+
+            ['!', '='] => TokenType::NotEqual,
+            ['!', ' '] | ['!'] => TokenType::Not,
+
+            ['>', '='] => TokenType::GreaterEqual,
+            ['>', ' '] | ['>'] => TokenType::Greater,
+            ['>', '>'] => TokenType::ShiftRight,
+
+            ['<', '='] => TokenType::LessEqual,
+            ['<', ' '] | ['<'] => TokenType::Less,
+            ['<', '<'] => TokenType::ShiftLeft,
+            ['&', '&'] => TokenType::AndBool,
+            ['&',  ' '] | ['&'] => TokenType::And,
+            ['|', '|'] => TokenType::OrBool,
+            ['|',  ' '] | ['|'] => TokenType::Or,
+            _ => todo!()
+        }
+    }
 }

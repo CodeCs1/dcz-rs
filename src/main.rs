@@ -1,14 +1,12 @@
 #![allow(non_snake_case)]
 
-use std::{fs::File, io::Read, path::Path/*, iter::zip*/};
+use std::{fs::File, path::Path/*, iter::zip*/};
 use clap::Parser;
-use codegen::codegen::Codegen;
-use object_out::ObjectOut;
 //use codegen::codegen::Codegen;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
 
-use crate::{codegen::{llvm::Module, llvm_codegen::TypeValue}, object_out::llvm_object};
+use crate::{codegen::{llvm::Module}, object_out::llvm_object};
 
 //use object_out::ObjectOut;
 
@@ -37,8 +35,12 @@ struct Cmd {
     // It could be: (0: basic optimization)
     Optimization: char,
 
+    ///Architecture flags
     #[arg(short, default_value="x64")]
-    Architecture: String
+    Architecture: String,
+
+    #[arg(short, long, default_value_t=false)]
+    Verbose: bool
 }
 
 #[derive(Debug, Clone)]
@@ -71,54 +73,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let expr = c.check()?;
     println!("{:#?}", expr);
 
-    let binding = Module::new(args.file);
+    let binding = Module::new(args.file.clone());
     let cg_c = codegen::llvm_codegen::LLVMCodegen::compile(expr, &binding);
     cg_c.codegen_all();
     cg_c.get_module().dump();
 
-    llvm_object::LLVMObject::new(cg_c.get_module(), arch).ir2obj();
-
-    
-    /*
-    let mut ast2ir = codegen::ast_2_ir::Ast2Ir::new(c.check()?);
-    let opcode_list = ast2ir.to_ir();*/
-    /*
-
-    if args.run {
-        use VM::vm;
-        vm::VM::new(ast2ir.const_pool.clone()).run(opcode_list.instr,0).expect("VMError");
-        return Ok(());
-    }
-
-    
-    let mut code_gen = Codegen::new();
-
-    code_gen.instr(opcode_list.instr,0);
-
-    let mut obj = ObjectOut::new();
-    let mut func_vec = Vec::new();
-    for (n,o) in code_gen.func_location.iter_mut() {
-        func_vec.push((n.clone(),obj.add_func(n.as_str(), o.assemble(0)?)));
-    }
-    /*
-    if opcode.instructions().len() > 0 {
-        obj.add_func("_start",opcode.assemble(0)?);
-    }*/
-    
-    code_gen.call_location.iter().for_each(|(n,loc)| {
-        if let Some(idx) = func_vec.iter().position(|(f,_)| f == n) {
-            let (_,sym) = func_vec[idx];
-            //dbg!(loc);
-            obj.add_text_reloc(sym, *loc as u64, -4);
-        }
-    });
-
-    code_gen.assign_location.iter().for_each(|(n,v)| {
-        obj.add_value_data(n.clone(),v.clone());
-    });
-
-    std::fs::write("output.o", obj.write_buff()).expect("Failed to save output.o");
-
-*/
+    llvm_object::LLVMObject::new(cg_c.get_module(), arch).ir2obj(&args.file);
     Ok(())
 }

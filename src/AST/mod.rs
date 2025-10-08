@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, process::exit};
 
-use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::{DataType, Func_Header}};
+use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::{DataType, Func_Header, VariableData}};
 pub mod expr_node;
 pub mod ast_checker;
 use expr_node::Expr;
@@ -171,7 +171,7 @@ impl AST {
         return Box::new(Expr::WhileStmt(expr, body));
     }
 
-    fn func_header(&mut self) -> (Box<Expr>, Vec<(DataType,String,bool)>, (bool, Option<DataType>)){
+    fn func_header(&mut self) -> (Box<Expr>, Vec<VariableData>, (bool, Option<DataType>)){
         let func_name = self.primary();
 
         self.consume(TokenType::LeftParen, "Expect '(' in declare func");
@@ -181,7 +181,7 @@ impl AST {
             let dt = self.primary().to_datatype().expect("Expect data type - FuncStmt");
             let is_ptr = self.match_token(&mut vec![TokenType::Star]);
             let name = self.primary().ident_to_string();
-            arg_v.push((dt, name, is_ptr));
+            arg_v.push(VariableData { dt: dt, name:name, is_const: false, is_ptr: is_ptr, init: None, is_used: true });
             if !self.check(TokenType::RightParen) {
                 self.consume(TokenType::Comma, "Expect ',' in arguments declare");
             }

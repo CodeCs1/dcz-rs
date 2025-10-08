@@ -4,7 +4,7 @@ mod test {
 
     #[test]
     fn tokenizer_test_simple() {
-        let mut t = Token::new("(()".to_string());
+        let mut t = Token::new("(()".to_string(), None);
         let meta_data = t.tokenize();
         assert_eq!(meta_data.tok_data, vec![
             TokenData {
@@ -45,9 +45,9 @@ mod test {
             }
         ])
     }
-    #[test] 
+    #[test]
     fn tokenizer_test_string() {
-        let mut t = Token::new("\"Hello World\"".to_string());
+        let mut t = Token::new("\"Hello World\"".to_string(), None);
         let meta_data = t.tokenize();
         assert_eq!(meta_data.tok_data, vec![
             TokenData {
@@ -70,9 +70,9 @@ mod test {
             }
         ])
     }
-    #[test] 
+    #[test]
     fn tokenizer_test_identifier_keyword() {
-        let mut t = Token::new("abcxyz".to_string());
+        let mut t = Token::new("abcxyz".to_string(), None);
         let meta_data1 = t.tokenize();
         assert_eq!(meta_data1.tok_data, vec![
             TokenData {
@@ -94,7 +94,7 @@ mod test {
                 sub_tok: None
             }
         ]);
-        let mut t1 = Token::new("suu number".to_string());
+        let mut t1 = Token::new("suu number".to_string(),None);
         let meta_data2 = t1.tokenize();
         assert_eq!(meta_data2.tok_data, vec![
             TokenData {

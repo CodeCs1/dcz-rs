@@ -1,4 +1,14 @@
-use crate::AST::expr_node::Func_Header;
+/*
+    This AST Checker one will do:
+     + passes on some basic optimization including:
+        Constant folding
+        Unused variable
+        Limit some data type
+     + Basic type checking
+
+*/
+
+use crate::AST::expr_node::{Func_Header, VariableData};
 use crate::{panic_error, MessageHandler::message_handler, Value::Value};
 use crate::MessageHandler::message_handler::{throw_message, MessageType};
 use super::expr_node::{DataType, Expr};
@@ -11,25 +21,19 @@ pub struct FAST { // AST formatter
     pub is_used: bool
 }
 
-struct VariableData {
-    dt: DataType,
-    name: String,
-    is_const: bool,
-    is_ptr: bool,
-    init: Expr,
-    is_used: bool,
-}
+
 
 pub struct Checker<'a> {
     ast: &'a Vec<Expr>,
     pseudo_variable_stack: Vec<VariableData>, // DataType, Name, is_const, is_ptr, init_v
     pseudo_function_stack: Vec<FAST>,
-    extern_function_stack: HashMap<String, Func_Header>
+    extern_function_stack: HashMap<String, Func_Header>,
+    macro_define: HashMap<String, Vec<Expr>>
 }
 
 
 
-fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) -> 
+fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
     Result<(Option<Box<Expr>>, DataType, bool),String>
     {
     let mut init_v =None;
@@ -54,11 +58,18 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
                 return Ok((Some(Box::new(v)), DataType::Char, true));
             }
             if !is_ptr {
+                if matches!(dt, DataType::Suu) {
+                    println!("[Suu]: Get that trash outta my face");
+                }
                 return Err(format!("Cannot convert from {:?} to string literal (variable MUST be pointer and data type MUST be char)", data_type.clone()));
             }
             if is_ptr && !matches!(dt, DataType::Char) {
                 return Err(format!("Cannot convert from {:?}* to string literal (data type MUST be char)", dt.clone()));
             }
+        }
+
+        if is_ptr {
+            return Ok((Some(Box::new(v)), dt, true));
         }
 
         let vi64 = if to_v.clone().is_literal() {
@@ -138,7 +149,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
     Ok((init_v,data_type, is_ptr))
 }
 
-pub fn catch_error(r: Result<FAST, String>) -> FAST {
+pub fn catch_error(r: Result<Option<FAST>, String>) -> Option<FAST> {
     match r {
         Ok(f) => f,
         Err(s) => {
@@ -150,22 +161,44 @@ pub fn catch_error(r: Result<FAST, String>) -> FAST {
 impl<'a> Checker<'a> {
 
     pub fn new(ast: &'a Vec<Expr>) -> Self {
-        Self { 
-            ast: ast, 
-            pseudo_variable_stack: Vec::new(), 
+        Self {
+            ast: ast,
+            pseudo_variable_stack: Vec::new(),
             pseudo_function_stack: Vec::new(),
-            extern_function_stack: HashMap::new()
+            extern_function_stack: HashMap::new(),
+            macro_define: HashMap::new()
+
         }
     }
 
-    fn visit(&mut self, expr: Expr) -> Result<FAST, String> {
+    fn visit(&mut self, expr: Expr) -> Result<Option<FAST>, String> {
         let e = expr.clone();
         match expr {
             Expr::Statement(e) => self.visit(*e),
-            // bypass checking
-            Expr::Return(_v) => Ok(FAST { expr: e, is_used: true }),
-            Expr::Callee(n, _e) => {
-                
+            Expr::Return(v) =>  {
+                let ret = if let Some(ret_v) = v {
+                    self.visit(*ret_v)?
+                } else {
+                    None
+                };
+                Ok (
+                    Some(
+                        FAST {
+                            expr: Expr::Return({
+                                if ret.is_none() {
+                                    None
+                                } else {
+                                    Some(Box::new(ret.unwrap().expr))
+                                }
+                            }
+                            ),
+                            is_used: true
+                        }
+                    )
+                )
+            },
+            Expr::Callee(n, args) => {
+
                 if !self.pseudo_function_stack.iter().any(|f| {
                     let func = f.expr.get_function();
                     n.ident_to_string() == func.0
@@ -175,24 +208,55 @@ impl<'a> Checker<'a> {
                     }
                 }
 
-                Ok(FAST {expr: e, is_used: true})
+                let args = self.check_ast(args)?;
+
+                Ok(Some(FAST {expr: Expr::Callee(n, args), is_used: true}))
             },
             Expr::Var(n) => {
                 if let Some(idx) = self.pseudo_variable_stack.iter().position(|f| {
                     f.name == n
                 }) {
                     self.pseudo_variable_stack[idx].is_used = true;
-                    Ok(FAST { expr:e, is_used: true }) // let codegen do the rest
+                    Ok(Some(FAST { expr:e, is_used: true })) // let codegen do the rest
                 } else {
-                    Err(format!("Variable '{}' not declared!", n))
+                    // maybe it's in macro define hashmap
+
+                    if let Some(idx) = self.macro_define.iter().find(|f| {
+                        f.0 == n.as_str()
+                    }) {
+                        Ok(
+                            Some(
+                                FAST {
+                                    expr: idx.1[0].clone(),
+                                    is_used: true
+                                }
+                            )
+                        )
+                    } else {
+                        // yea, just give up already =P
+                        Err(format!("Variable '{}' not declared!", n))
+                    }
                 }
             }
-            Expr::WhileStmt(_s, _r) => Ok(FAST { expr: e, is_used: true}),
+            Expr::WhileStmt(condition, expr) => {
+                let cond = self.visit(*condition)?.unwrap();
+                let expr = self.visit(*expr)?.unwrap();
+                Ok(Some(
+                    FAST {
+                        expr: Expr::WhileStmt(
+                            Box::new(cond.expr),
+                            Box::new(expr.expr)
+                        ),
+                        is_used: true
+                        }
+                    )
+                )
+            },
 
             Expr::VarDecl(dt, is_p,is_const, n, init) => {
-                let (init_v,data_type) = 
+                let (init_v,data_type,is_str) =
                     match check_literal_type(init, dt.clone(), is_p) {
-                        Ok(v) => (v.0,v.1),
+                        Ok(v) => (v.0,v.1,v.2),
                         Err(s) => {
                             throw_message("source",
                              MessageType::Error, 1,1 , s.as_str());
@@ -205,12 +269,12 @@ impl<'a> Checker<'a> {
                 }).is_some() {
                     return Err(format!("Variable '{}' already defined", n));
                 }
-                let k = self.visit(*init_v.clone().unwrap());
+                let k = self.visit(*init_v.clone().unwrap())?.unwrap();
 
                 self.pseudo_variable_stack.push(
-                    VariableData { dt: dt, name: n.clone(), is_const: is_const, is_ptr: is_p, init: k.clone()?.expr, is_used: false }
+                    VariableData { dt: dt, name: n.clone(), is_const: is_const, is_ptr: is_p, init: Some(k.clone().expr), is_used: false }
                 );
-                Ok(FAST { expr: Expr::VarDecl(data_type, is_p,is_const, n, Some(Box::new(k?.expr))), is_used: false })
+                Ok(Some(FAST { expr: Expr::VarDecl(data_type, is_str,is_const, n, Some(Box::new(k.expr))), is_used: false }))
             },
 
 
@@ -223,89 +287,112 @@ impl<'a> Checker<'a> {
                     if assign.is_const {
                         return Err(format!("Constant variable '{}' cannot be assignable!", n));
                     }
-                    let init_v = 
+                    let init_v =
                         if let Ok(v) = check_literal_type(Some(v), assign.dt.clone(), assign.is_ptr) {
                             v.0.unwrap()
                         } else {
                             exit(1);
                         };
-                    Ok(FAST { expr: Expr::Assign(n, init_v), is_used: true })
+                    Ok(Some(FAST { expr: Expr::Assign(n, init_v), is_used: true }))
                 }
             }
 
-            Expr::Literal(_v) => Ok(FAST { expr: e, is_used: true }),
+            Expr::Literal(_v) => Ok(Some(FAST { expr: e, is_used: true })),
             Expr::FuncStmt(f,body) => {
                 //self.visit(*b)
                 //add to pseudo_variable_stack
 
-                let f=FAST {
-                    expr: Expr::FuncStmt(f, Box::new(self.visit(*body)?.expr)),
+                //temporary add args into variable stack
+                self.pseudo_variable_stack.append(&mut f.args.clone());
+
+                let fast=FAST {
+                    expr: Expr::FuncStmt(f.clone(), Box::new(self.visit(*body)?.unwrap().expr)),
                     is_used: true
                 };
 
-                self.pseudo_function_stack.push(f.clone());
+                self.pseudo_function_stack.push(fast.clone());
+                //and then remove it from variable stack
+                for _ in 0..f.args.len() {
+                    self.pseudo_variable_stack.pop();
+                }
 
-                Ok(f)
+                Ok(Some(fast))
             }
             Expr::Block(b) => {
                 let bl = self.check_ast(b)?;
-                Ok(FAST { expr: Expr::Block(bl),
+                Ok(Some(FAST { expr: Expr::Block(bl),
                     is_used: true
-                })
+                }))
             }
             Expr::Binary(mut lhs, op, mut rhs) => {
-                let lhs = self.visit(lhs.visit());
-                let rhs = self.visit(rhs.visit());
+                let lhs = self.visit(lhs.visit())?.unwrap();
+                let rhs = self.visit(rhs.visit())?.unwrap();
 
-                let e = Expr::Binary(Box::new(lhs?.expr),op,Box::new(rhs?.expr)).visit();
+                let e = Expr::Binary(Box::new(lhs.expr),op,Box::new(rhs.expr)).visit();
 
                 Ok(
-                    FAST {
+                    Some(FAST {
                         expr: e,
                         is_used: true
-                    }
+                    })
                 )
             }
             Expr::IfStmt(cond,then_bl ,else_bl ) => {
-                let cond = self.visit(*cond)?;
+                let cond = self.visit(*cond)?.unwrap();
                 if matches!(cond.expr, Expr::Literal(_)) {
                     if cond.expr.to_value() == Value::Number(0) {
                         if matches!(*else_bl, Expr::None) {
                             return Ok(
-                                FAST{
+                                Some(FAST{
                                     expr: Expr::None,
                                     is_used: false
-                                }
+                                })
                             );
                         } else {
-                            return Ok(FAST { expr: *else_bl, is_used: true });
+                            return Ok(Some(FAST { expr: *else_bl, is_used: true }));
                         }
                     } else {
-                        return Ok(FAST { expr: *then_bl, is_used: true });
+                        return Ok(Some(FAST { expr: *then_bl, is_used: true }));
                     }
                 }
-                let then_bl = self.visit(*then_bl)?;
+                let then_bl = self.visit(*then_bl)?.unwrap();
                 let else_bl = if !matches!(*else_bl, Expr::None) {
-                    self.visit(*else_bl)?
+                    self.visit(*else_bl)?.unwrap()
                 } else {
                     FAST {expr: Expr::None, is_used: false}
                 };
-                Ok(FAST {
+                Ok(Some(FAST {
                     expr: Expr::IfStmt(Box::new(cond.expr), Box::new(then_bl.expr), Box::new(else_bl.expr)),
                     is_used: true
-                })
+                }))
             }
             Expr::Extern(b) => {
-                //add this into pseudo function stack (used by callee) 
-                
+                //add this into pseudo function stack (used by callee)
+
                 self.extern_function_stack.insert(b.clone().name, b);
 
                 Ok(
-                    FAST { 
+                    Some(FAST {
                         expr:e, //will be useful for AST2IR
-                        is_used: true 
-                    }
+                        is_used: true
+                    })
                 )
+            }
+            Expr::Macro(name, expr) => {
+                match name.as_str() {
+                    "define" => {
+                        let name = expr[0].ident_to_string();
+                        let expr_slide = self.check_ast(
+                            Vec::from(&expr[1..])
+                        )?;
+                        self.macro_define.insert(
+                            name,
+                            expr_slide
+                        );
+                    }
+                    o => unimplemented!("{:?}", o)
+                }
+                Ok(None)
             }
             o => todo!("Expression {:?} does not implemented yet!", o)
         }
@@ -313,8 +400,12 @@ impl<'a> Checker<'a> {
 
     fn check_ast(&mut self, ast: Vec<Expr>) -> Result<Vec<Expr>, String> {
         let mut res = Vec::new();
-        let mut original_fast = ast.iter().map(|f|
-            catch_error(self.visit(f.clone()))).collect::<Vec<FAST>>();
+        // map and remove 'None' Option value
+        let mut original_fast = ast.iter()
+            .map(|f| catch_error(self.visit(f.clone())))
+            .filter(|f| f.is_some())
+            .map(|f| f.unwrap())
+            .collect::<Vec<FAST>>();
 
         for func_f in &self.pseudo_function_stack {
             original_fast.iter().find(|f| {
@@ -339,7 +430,7 @@ impl<'a> Checker<'a> {
         }
 
         res.append(
-            &mut 
+            &mut
             original_fast.into_iter().filter(|f| {
                 f.is_used
             }).map(|f| {

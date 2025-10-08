@@ -13,6 +13,7 @@ pub enum DataType {
     Suu, // replace for double data type
     Void,
     Unknown
+
 }
 
 impl DataType {
@@ -27,10 +28,20 @@ impl DataType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct VariableData {
+    pub dt: DataType,
+    pub name: String,
+    pub is_const: bool,
+    pub is_ptr: bool,
+    pub init: Option<Expr>,
+    pub is_used: bool,
+}
+
 #[derive(Debug, Clone,PartialEq)]
 pub struct Func_Header {
     pub name: String,
-    pub args: Vec<(DataType,String,bool)>,
+    pub args: Vec<VariableData>,
     pub return_type: Option<DataType>,
     pub is_ptr_dt: bool
 }
@@ -134,7 +145,7 @@ impl<'a> Expr
             _ => "".to_string()
         }
     }
-    pub fn get_function(&self) -> (String, Vec<(DataType, String,bool)>, Box<Expr>, Option<DataType>) {
+    pub fn get_function(&self) -> (String, Vec<VariableData>, Box<Expr>, Option<DataType>) {
         match self {
             Expr::FuncStmt(func_header, body ) => {
                 (func_header.name.clone(),
