@@ -1,0 +1,3 @@
+let k = <int>23;
+let l = <int>12.3;
+l;

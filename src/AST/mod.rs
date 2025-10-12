@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, process::exit};
 
-use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::{DataType, Func_Header, VariableData}};
+use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, Func_Header, VariableData}};
 pub mod expr_node;
 pub mod ast_checker;
 use expr_node::Expr;
@@ -44,9 +44,9 @@ impl AST {
         Self { token: meta_data.clone().tok_data, current:0, filename: meta_data.clone().filename, meta_data: meta_data.clone() }
 
     }
-    
+
     fn is_eof(&self) -> bool {
-        self.current >= self.token.len() || self.token[self.current].tok_type == TokenType::EOF 
+        self.current >= self.token.len() || self.token[self.current].tok_type == TokenType::EOF
     }
 
     fn peek(&self) -> TokenData {
@@ -81,9 +81,9 @@ impl AST {
 
     fn consume(&mut self, tok_type: TokenType, message: &str) {
         if self.check(tok_type) { self.advance(); }
-        else { 
+        else {
             let p = self.peek();
-            panic!("{} at {}:{}", message, p.line, p.end); 
+            panic!("{} at {}:{}, Got ({:#?}, which is: {})", message, p.line, p.end, p.tok_type, p.identifier);
         }
     }
 
@@ -136,7 +136,7 @@ impl AST {
         }
         self.callee()
     }
-    
+
     // very rust
     create_binary!(self, factor, self.unary(), vec![TokenType::Star, TokenType::Slash], self.unary());
     create_binary!(self, term, self.factor(), vec![TokenType::Plus, TokenType::Minus], self.factor());
@@ -146,8 +146,20 @@ impl AST {
     create_binary!(self, logical, self.equal(), vec![TokenType::Or, TokenType::And], self.equal());
     create_binary!(self, bool_logical, self.logical(), vec![TokenType::OrBool, TokenType::AndBool], self.logical());
 
+    fn casting(&mut self) -> Box<Expr> {
+        // let k = <int>34.1; <- this will be cast in compile time
+        // let k = <A*>0x12; <- this will be cast in runtime, where A is sturct or class
+        if !self.check(TokenType::Less) { return self.assignment() }
+
+        self.advance(); // eat '<'
+
+        let cast_dt = self.primary().to_datatype().expect("Unknown cast data type");
+        self.consume(TokenType::Greater, "Expect '>' in casting");
+        return Box::new(Expr::Cast { newdataType: cast_dt, expr: self.expr() })
+    }
+
     fn expr(&mut self) -> Box<Expr> {
-        self.assignment()
+        self.casting()
     }
 
     fn assignment(&mut self) -> Box<Expr> {
@@ -212,14 +224,14 @@ impl AST {
          * }
          * */
         let func_header = self.func_header();
-        
+
         self.consume(TokenType::LeftBrace, "Expect '{' in declare func");
         let body = self.block();
 
         Box::new(
             Expr::FuncStmt(
-                Func_Header { 
-                    name: func_header.0.ident_to_string(), 
+                Func_Header {
+                    name: func_header.0.ident_to_string(),
                     args: func_header.1,
                     return_type: func_header.2.1,
                     is_ptr_dt: func_header.2.0
@@ -241,7 +253,7 @@ impl AST {
                 if v.to_value().to_datatype() != data_type {
                     let p = self.peek();
                     throw_message(
-                        &self.filename, 
+                        &self.filename,
                         crate::MessageHandler::message_handler::MessageType::Error,
                         p.line as i64, p.start as i64, &format!("List item must be same as {:?}", data_type));
                     exit(1);
@@ -258,8 +270,58 @@ impl AST {
         )
     }
 
+    fn class_stmt(&mut self) -> Box<Expr> {
+        self.consume(TokenType::Identifier, "Expect class name as identifier");
+        let name = self.previous().identifier;
+
+        self.consume(TokenType::LeftBrace, "Expect '{' in class definition");
+        let mut func_list = Vec::new();
+        while !self.check(TokenType::RightBrace) && !self.is_eof() {
+            let access =
+                match self.advance().identifier.as_str() {
+                    "public" => AccessLevel::Public,
+                    "private" => AccessLevel::Private,
+                    _ => AccessLevel::None
+                };
+            let is_func = self.peek().identifier == "func";
+            if is_func {
+                self.advance();
+            }
+            let class_func_type =
+            if is_func {
+                ClassFunctionType::Function
+            } else if self.check(TokenType::Tilde) {
+                self.advance();
+                ClassFunctionType::Deconstructor
+            } else {
+                ClassFunctionType::Initializer
+            };
+            let f = self.func_stmt();
+
+
+            let f_name = f.get_function().0;
+            if f_name != name &&
+                (class_func_type == ClassFunctionType::Initializer ||
+                class_func_type == ClassFunctionType::Deconstructor) {
+                panic!("Function {:?} name MUST be same as class name!\nExpect function {:?} name: '{}', got '{}'\n", class_func_type,class_func_type,name, f_name);
+            }
+
+            func_list.push(ClassFunction{
+                function: *f,
+                func_type: class_func_type,
+                access_level: access
+            });
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' in class definition");
+
+        Box::new(
+            Expr::Class(name, func_list)
+        )
+    }
+
     fn statement(&mut self) -> Box<Expr> {
-        
+
         if self.match_token(&mut vec![TokenType::LeftBrace]) {
             return self.block();
         }
@@ -268,6 +330,7 @@ impl AST {
         check_keyword!(self, "func", self.func_stmt());
         check_keyword!(self, "extern", self.extern_func());
         check_keyword!(self, "return", self.return_keyw());
+        check_keyword!(self, "class", self.class_stmt());
 
         let expr = self.var_decl();
         if ! matches!(*expr, Expr::None) {
@@ -301,7 +364,7 @@ impl AST {
         if self.advance().identifier != "func" {
             throw_message(&self.filename,
                 crate::MessageHandler::message_handler::MessageType::Error,
-                self.peek().line as i64, self.peek().start as i64, 
+                self.peek().line as i64, self.peek().start as i64,
             "extern declare must be start with 'func' keywords");
             exit(1);
         }
@@ -309,7 +372,7 @@ impl AST {
         let func_header = self.func_header();
 
         self.consume(TokenType::Semicolon, "Expect ';' after extern function");
-        
+
         Box::new (
             Expr::Extern(Func_Header {
                 name: func_header.0.ident_to_string(),
@@ -357,18 +420,18 @@ impl AST {
     fn var_decl(&mut self) -> Box<Expr> {
         // char* a = "hello world";
         // let a: const = 3;
-        
-        //check if current token is not data type
-        
 
-        if self.peek().tok_type != TokenType::DataType 
-        && self.peek().identifier != "let" 
+        //check if current token is not data type
+
+
+        if self.peek().tok_type != TokenType::DataType
+        && self.peek().identifier != "let"
         && self.peek().identifier != "const" {
             return self.expr();
         }
 
         let is_const = self.peek().identifier=="const";
-        
+
         let mut data_type = if self.peek().tok_type == TokenType::DataType {
             self.primary().to_datatype().expect("VarDecl")
         } else {
@@ -382,7 +445,7 @@ impl AST {
             let l =self.peek().line;
             let p =self.peek().start;
             throw_message(
-                "stdin", 
+                "stdin",
                 crate::MessageHandler::message_handler::MessageType::Error,
                 l as i64, p as i64,"Using keyword as variable name is forbidden!");
             exit(1);
@@ -393,7 +456,7 @@ impl AST {
                 let l =self.peek().line;
                 let p =self.peek().start;
                 throw_message(
-                    &self.filename, 
+                    &self.filename,
                     crate::MessageHandler::message_handler::MessageType::Error,
                     l as i64, p as i64,&format!("Can't override to data type: {:?}\nFix this by using 'let' instead.", data_type));
                 exit(1);
@@ -427,7 +490,7 @@ impl AST {
 
     pub fn parse(&mut self) -> Vec<Expr> {
         let mut expr_vec: Vec<Expr> = Vec::new();
-        
+
         while !self.is_eof() {
             if self.match_token(&mut vec![TokenType::Macro]) {
                 let mut vect: Vec<Expr> = Vec::new();
@@ -443,7 +506,7 @@ impl AST {
                 }
             }
             else {
-                
+
                 let expr = *self.statement();
                 match expr {
                     Expr::None => {}

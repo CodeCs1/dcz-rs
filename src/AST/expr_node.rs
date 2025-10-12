@@ -47,6 +47,27 @@ pub struct Func_Header {
 }
 
 #[derive(Debug, Clone,PartialEq)]
+pub enum AccessLevel {
+    Private,
+    Public,
+    None
+}
+
+#[derive(Debug, Clone,PartialEq)]
+pub enum ClassFunctionType {
+    Function,
+    Initializer,
+    Deconstructor
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ClassFunction {
+    pub access_level: AccessLevel,
+    pub func_type: ClassFunctionType,
+    pub function: Expr
+}
+
+#[derive(Debug, Clone,PartialEq)]
 pub enum Expr {
     /// Binary Expression (Expr, Operator, Expr)
     Binary(Box<Expr>, TokenData, Box<Expr>),
@@ -73,6 +94,10 @@ pub enum Expr {
 
     /// Extern declare statement
     Extern(Func_Header),
+    /// class statement
+    Class(String, Vec<ClassFunction>),
+    /// casting expr
+    Cast{ newdataType: DataType, expr: Box<Expr>},
 
     None
 }
@@ -128,7 +153,26 @@ impl<'a> Expr
             Expr::Var(_) => self.clone(),
             Expr::Statement(st) => st.visit(),
             Expr::Callee(_, _) => self.clone(),
-            o => todo!("Expr visit does not implemented {:?} yet ", o)
+            Expr::Cast { newdataType, expr } => {
+                match newdataType {
+                    DataType::Int => {
+                        let e = *expr.clone();
+                        if let Expr::Literal(n) = e{
+                            match n.clone().to_datatype() {
+                                DataType::Char => Expr::Literal(Value::Value::Number(n.to_char() as i64)),
+                                DataType::Short => Expr::Literal(Value::Value::Number(n.to_literal() as i64)),
+                                DataType::Float => Expr::Literal(Value::Value::Number(n.to_float() as i64)),
+                                DataType::Int => Expr::Literal(n),
+                                _ => todo!("not impl data type {:?} yet", n.clone().to_datatype())
+                            }
+                        }else {
+                            self.clone()
+                        }
+                    }
+                    _ => self.clone()
+                }
+            }
+            o => todo!("Expr visit does not implement {:?} yet ", o)
         }
     }
     pub fn to_value(&self) -> Value::Value {

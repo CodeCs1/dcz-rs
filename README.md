@@ -11,7 +11,7 @@ $ dcz foobar.dcz -o foobar.o
 ```
 
 ## Sample code
-This is a working code for printing a sample "Hello World"
+This is a working code for printing a simple "Hello World"
 ```
 extern func printf(char* str);
 func main() -> int {
@@ -20,6 +20,9 @@ func main() -> int {
 }
 ```
 Other samples can be found inside `examples` folder
+
+## Test
+Run the test by running: `cargo test`
 
 ## Contributing?
 Pull requests are welcome. For major changes, please open an issue first

@@ -8,7 +8,7 @@
 
 */
 
-use crate::AST::expr_node::{Func_Header, VariableData};
+use crate::AST::expr_node::{ClassFunction, Func_Header, VariableData};
 use crate::{panic_error, MessageHandler::message_handler, Value::Value};
 use crate::MessageHandler::message_handler::{throw_message, MessageType};
 use super::expr_node::{DataType, Expr};
@@ -394,6 +394,29 @@ impl<'a> Checker<'a> {
                 }
                 Ok(None)
             }
+            Expr::Class(name, func) => {
+                let mut func_stmt = Vec::new();
+                for x in func {
+                    func_stmt.push(
+                        ClassFunction {
+                            function:
+                                self.visit(x.function)?
+                                .unwrap_or(FAST { expr: Expr::None, is_used:false })
+                                .expr,
+                            func_type: x.func_type,
+                            access_level: x.access_level
+                        }
+                    );
+                }
+                Ok(
+                    Some(
+                        FAST {
+                            expr: Expr::Class(name, func_stmt),
+                            is_used: true
+                        }
+                    )
+                )
+            },
             o => todo!("Expression {:?} does not implemented yet!", o)
         }
     }

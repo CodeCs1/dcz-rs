@@ -45,6 +45,7 @@ pub enum TokenType {
     SlashEqual,
     PlusPlus,
     MinusMinus,
+    Tilde,
 
     EOF
 }

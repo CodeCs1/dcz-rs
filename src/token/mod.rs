@@ -318,8 +318,8 @@ impl Token {
                 // add str to data section
                 self.data.append_string(sub_str.clone());
                 Some(self.To_TokenData_String(sub_str.clone()))
-            }
-
+            },
+            '~' => Some(self.ToTokenData_Symbol(TokenType::Tilde)),
             '0'..='9' => {
                 let mut radix = 10;
 
@@ -378,7 +378,7 @@ impl Token {
             'a'..='z' | 'A'..='Z' | '_' => {
                 let kw = vec![
                     //keyword
-                    "func", "if", "else", "while", "for", "let", "extern",
+                    "func", "if", "else", "while", "for", "let", "extern", "class", "struct", "public", "private"
                 ];
 
                 let data_type_kw = vec![
