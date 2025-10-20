@@ -277,6 +277,18 @@ impl <'llvm>Builder<'llvm> {
 
         LlvmValue::new(value_ref)
     }
+    pub fn isub(&self, lhs: LlvmValue<'llvm>,rhs: LlvmValue<'llvm>) ->LlvmValue<'llvm> {
+        let value_ref =unsafe{
+            LLVMBuildSub(
+                self.builder,
+                lhs.value_ref(),
+                rhs.value_ref(),
+                b"add\0".as_ptr().cast()
+            )
+        };
+
+        LlvmValue::new(value_ref)
+    }
     pub fn cond_br(&self, cond: LlvmValue<'llvm>, then_bb: BasicBlock<'llvm>, else_bb: BasicBlock<'llvm>) {
         let br = unsafe {
             LLVMBuildCondBr(self.builder,

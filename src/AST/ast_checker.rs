@@ -9,10 +9,10 @@
 */
 
 use crate::AST::expr_node::{ClassFunction, Func_Header, VariableData};
-use crate::{panic_error, MessageHandler::message_handler, Value::Value};
-use crate::MessageHandler::message_handler::{throw_message, MessageType};
+use crate::{panic_error, Value::Value};
+use crate::MessageHandler::{throw_message, MessageType};
 use super::expr_node::{DataType, Expr};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::process::exit;
 
 #[derive(Debug, Clone,PartialEq)]
@@ -26,7 +26,7 @@ pub struct FAST { // AST formatter
 pub struct Checker<'a> {
     ast: &'a Vec<Expr>,
     pseudo_variable_stack: Vec<VariableData>, // DataType, Name, is_const, is_ptr, init_v
-    pseudo_function_stack: Vec<FAST>,
+    pseudo_function_stack: BTreeMap<String, Option<FAST>>,
     extern_function_stack: HashMap<String, Func_Header>,
     macro_define: HashMap<String, Vec<Expr>>
 }
@@ -85,7 +85,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
         match dt {
             DataType::Char => {
                 if vi64 > u8::MAX as f64 {
-                    message_handler::throw_message("source", message_handler::MessageType::Warning, 1, 0, format!("char overflow, rolling back from {} to {}",
+                    throw_message("source", MessageType::Warning, 1, 0, format!("char overflow, rolling back from {} to {}",
                     vi64, vi64%u8::MAX as f64).as_str());
                 }
                 v=Expr::Literal(
@@ -96,7 +96,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
             },
             DataType::Short => {
                 if vi64 > i16::MAX as f64 {
-                    message_handler::throw_message("source", message_handler::MessageType::Warning, 1, 0, format!("short overflow, rolling back from {} to {}",
+                    throw_message("source", MessageType::Warning, 1, 0, format!("short overflow, rolling back from {} to {}",
                     vi64, vi64%i16::MAX as f64).as_str());
                 }
                 v=Expr::Literal(
@@ -107,7 +107,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
             },
             DataType::Int => {
                 if vi64 > i32::MAX as f64 {
-                    message_handler::throw_message("source", message_handler::MessageType::Warning, 1, 0, format!("int overflow, rolling back from {} to {}",
+                    throw_message("source", MessageType::Warning, 1, 0, format!("int overflow, rolling back from {} to {}",
                         vi64, vi64%i32::MAX as f64).as_str());
                 }
                 v=Expr::Literal(
@@ -118,7 +118,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
             },
             DataType::Suu => {
                 if vi64 > f64::MAX as f64 {
-                    message_handler::throw_message("source", message_handler::MessageType::Warning, 1, 0, format!("suu (double) overflow, rolling back from {} to {}",
+                    throw_message("source", MessageType::Warning, 1, 0, format!("suu (double) overflow, rolling back from {} to {}",
                         vi64, vi64%f64::MAX as f64).as_str());
                 }
                 v=Expr::Literal(
@@ -130,7 +130,7 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
 
             DataType::Long=> {
                 if vi64 > i64::MAX as f64 {
-                    message_handler::throw_message("source", message_handler::MessageType::Warning, 1, 0, format!("suu (double) overflow, rolling back from {} to {}",
+                    throw_message("source", MessageType::Warning, 1, 0, format!("suu (double) overflow, rolling back from {} to {}",
                         vi64, vi64%i64::MAX as f64).as_str());
                 }
                 v=Expr::Literal(
@@ -164,7 +164,7 @@ impl<'a> Checker<'a> {
         Self {
             ast: ast,
             pseudo_variable_stack: Vec::new(),
-            pseudo_function_stack: Vec::new(),
+            pseudo_function_stack: BTreeMap::new(),
             extern_function_stack: HashMap::new(),
             macro_define: HashMap::new()
 
@@ -199,10 +199,7 @@ impl<'a> Checker<'a> {
             },
             Expr::Callee(n, args) => {
 
-                if !self.pseudo_function_stack.iter().any(|f| {
-                    let func = f.expr.get_function();
-                    n.ident_to_string() == func.0
-                }) {
+                if !self.pseudo_function_stack.contains_key(&n.ident_to_string()){
                     if !self.extern_function_stack.contains_key(&n.ident_to_string()) {
                         return Err(format!("Function '{}' not declared!", n.ident_to_string()));
                     }
@@ -302,6 +299,8 @@ impl<'a> Checker<'a> {
                 //self.visit(*b)
                 //add to pseudo_variable_stack
 
+                self.pseudo_function_stack.insert(f.name.clone(), None);
+
                 //temporary add args into variable stack
                 self.pseudo_variable_stack.append(&mut f.args.clone());
 
@@ -310,7 +309,10 @@ impl<'a> Checker<'a> {
                     is_used: true
                 };
 
-                self.pseudo_function_stack.push(fast.clone());
+                if let Some(f) = self.pseudo_function_stack.get_mut(&(f.name)) {
+                    *f = Some(fast.clone());
+                }
+
                 //and then remove it from variable stack
                 for _ in 0..f.args.len() {
                     self.pseudo_variable_stack.pop();
@@ -433,11 +435,11 @@ impl<'a> Checker<'a> {
         for func_f in &self.pseudo_function_stack {
             original_fast.iter().find(|f| {
                 if matches!(f.expr, Expr::FuncStmt(_, _)) {
-                    f.expr.get_function().0 == func_f.expr.get_function().0
+                    f.expr.get_function().0 == *func_f.0
                 } else {
                     false
                 }
-            }).replace(&func_f.clone());
+            }).replace(&func_f.1.clone().unwrap_or(FAST {expr: Expr::None, is_used: false}));
         }
 
         for var_decl in &self.pseudo_variable_stack {

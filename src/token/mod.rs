@@ -3,8 +3,7 @@ use std::{fs::File, io::Read, path::Path, process::exit};
 use token_type::TokenType;
 
 use crate::{
-    DataSection::DataSection,
-    MessageHandler::message_handler::{self, throw_message},
+    MessageHandler::{MessageType, throw_message},
     Value::Value,
 };
 pub mod token_type;
@@ -25,7 +24,6 @@ pub struct TokenData {
 pub struct MetaData {
     pub filename: String,
     pub tok_data: Vec<TokenData>,
-    pub data: DataSection,
 }
 
 pub struct Token {
@@ -34,7 +32,6 @@ pub struct Token {
     at: usize,
     start: usize,
     line: usize,
-    data: DataSection,
     pub source_file_name: String,
 }
 
@@ -75,7 +72,6 @@ impl Token {
             current: 0,
             start: 0,
             line: 1,
-            data: DataSection::new(),
             source_file_name: filename_1,
             at: 0,
         }
@@ -88,7 +84,6 @@ impl Token {
             current: 0,
             start: 0,
             line: 1,
-            data: DataSection::new(),
             source_file_name: p.display().to_string(),
             at: 0,
         })
@@ -290,7 +285,7 @@ impl Token {
                     if self.peek() == '\n' {
                         throw_message(
                             &self.source_file_name,
-                            message_handler::MessageType::Error,
+                            MessageType::Error,
                             self.line as i64,
                             self.at as i64,
                             "Invaild string literal format",
@@ -303,7 +298,7 @@ impl Token {
                 if self.is_eof() {
                     throw_message(
                         &self.source_file_name,
-                        message_handler::MessageType::Error,
+                        MessageType::Error,
                         self.line as i64,
                         self.at as i64,
                         "Unterminated string literal",
@@ -315,8 +310,6 @@ impl Token {
 
                 sub_str = fmt_escape(sub_str);
 
-                // add str to data section
-                self.data.append_string(sub_str.clone());
                 Some(self.To_TokenData_String(sub_str.clone()))
             },
             '~' => Some(self.ToTokenData_Symbol(TokenType::Tilde)),
@@ -363,7 +356,7 @@ impl Token {
                 if !self.match_chr('\'') {
                     throw_message(
                         &self.source_file_name,
-                        message_handler::MessageType::Error,
+                        MessageType::Error,
                         self.line as i64,
                         self.at as i64,
                         "Invaild char format!",
@@ -411,7 +404,7 @@ impl Token {
             _ => {
                 throw_message(
                     &self.source_file_name,
-                    message_handler::MessageType::Error,
+                    MessageType::Error,
                     self.at as i64,
                     self.current as i64,
                     &format!("Unknown token: {}", curr_char),
@@ -445,7 +438,6 @@ impl Token {
         MetaData {
             filename: self.source_file_name.clone(),
             tok_data: token_data,
-            data: self.data.clone(),
         }
     }
 }

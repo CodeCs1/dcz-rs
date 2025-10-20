@@ -1,0 +1,12 @@
+extern func printf(char* str) -> int;
+
+func recur(int n) -> int {
+    if n < 0 { return n; }
+
+    return recur(n-1);
+}
+
+func main() -> int {
+    recur(3);
+    return 0;
+}

@@ -1,4 +1,4 @@
-use crate::{codegen::{llvm::Module, llvm_codegen}, object_out::llvm_object, token::{token_type::TokenType, Token, TokenData}, Value::Value, AST::{ast_checker::Checker, expr_node::{ClassFunction, Expr, Func_Header}, AST}};
+use crate::{codegen::{llvm::Module, llvm_codegen}, object_out::llvm_object, token::{Token}, AST::{ast_checker::Checker, AST}};
 use std::{fs::File, path::Path};
 fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
     let file_path = Path::new(file);
@@ -21,6 +21,8 @@ fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
 mod test {
     use std::process::Command;
 
+    use crate::{AST::expr_node::{ClassFunction, Expr, Func_Header}, Value::Value, token::{TokenData, token_type::TokenType}};
+
     use super::*;
 
     #[test]
@@ -29,7 +31,7 @@ mod test {
         let meta_data = t.tokenize();
         assert_eq!(meta_data.tok_data, vec![
             TokenData {
-                tok_type: TokenType::LeftParen,
+                tok_type:TokenType::LeftParen,
                 start:0,
                 end:1,
                 identifier: "".to_string(),

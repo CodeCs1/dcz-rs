@@ -119,7 +119,7 @@ impl<'llvm> LLVMCodegen<'llvm> {
             Expr::Literal(v) => {
                 match v {
                     Value::Number(n) => {
-                        
+
                         TypeValue::LLVMValue( self.module.type_i32().const_i32(n as i32))
                     }
                     Value::Str(s)=> {
@@ -144,8 +144,18 @@ impl<'llvm> LLVMCodegen<'llvm> {
                             self.builder.cmp(lhs.into(),llvm_sys_201::LLVMIntPredicate::LLVMIntEQ,rhs.into())
                         )
                     }
-                    _ => {
-                        todo!()
+                    TokenType::Less => {
+                        TypeValue::LLVMValue(
+                            self.builder.isub(lhs.into(),rhs.into())
+                        )
+                    }
+                    TokenType::Minus => {
+                        TypeValue::LLVMValue(
+                            self.builder.cmp(lhs.into(),llvm_sys_201::LLVMIntPredicate::LLVMIntSLT,rhs.into())
+                        )
+                    }
+                    o => {
+                        todo!("Unsupport Token: {:#?}", o)
                     }
                 }
             }

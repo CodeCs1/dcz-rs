@@ -3,3 +3,4 @@ gitpush.sh
 *.o
 Cargo.lock
 test
+problem.txt

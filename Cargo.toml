@@ -9,5 +9,5 @@ iced-x86 = { version="1.21.0", features=["code_asm"] }
 object = { version="0.37.1", features=["build", "write"] }
 colored = "3.0.0"
 
-llvm-sys-201 = { package = "llvm-sys", version = "201" }
+llvm-sys-201 = { package = "llvm-sys", version = "211" }
 libc = "0.2.175"

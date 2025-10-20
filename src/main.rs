@@ -2,7 +2,6 @@
 
 use std::{fs::File, path::Path/*, iter::zip*/};
 use clap::Parser;
-//use codegen::codegen::Codegen;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
 
@@ -13,11 +12,9 @@ use crate::{codegen::{llvm::Module}, object_out::llvm_object};
 mod object_out;
 mod AST;
 mod token;
-mod DataSection;
 mod Value;
 mod test;
 mod codegen;
-mod VM;
 mod MessageHandler;
 
 

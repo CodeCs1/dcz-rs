@@ -4,6 +4,9 @@ A basic compiler programming language that share the similarity with C/C++ lang.
 ## Installation
 Clone this repo and then compile it using cargo
 
+## Dependencies
+Newest LLVM (21.1.3)
+
 ## Usage
 To compile a script file, run:
 ```sh

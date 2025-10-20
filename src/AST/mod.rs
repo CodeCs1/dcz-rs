@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, process::exit};
 
-use crate::{token::{token_type::TokenType, MetaData, TokenData}, MessageHandler::message_handler::throw_message, Value::Value, AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, Func_Header, VariableData}};
+use crate::{AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, Func_Header, VariableData}, MessageHandler::{self, throw_message}, Value::Value, token::{MetaData, TokenData, token_type::TokenType}};
 pub mod expr_node;
 pub mod ast_checker;
 use expr_node::Expr;
@@ -79,11 +79,17 @@ impl AST {
         })
     }
 
+    fn error(&self, dt: TokenData) -> ! {
+        //MessageHandler::throw_message(source_name, message_type, line, pos, message);
+        panic!()
+    }
+
     fn consume(&mut self, tok_type: TokenType, message: &str) {
         if self.check(tok_type) { self.advance(); }
         else {
             let p = self.peek();
-            panic!("{} at {}:{}, Got ({:#?}, which is: {})", message, p.line, p.end, p.tok_type, p.identifier);
+            //panic!("{} at {}:{}, Got ({:#?}, which is: {})", message, p.line, p.end, p.tok_type, p.identifier);
+            self.error(p);
         }
     }
 
@@ -254,7 +260,7 @@ impl AST {
                     let p = self.peek();
                     throw_message(
                         &self.filename,
-                        crate::MessageHandler::message_handler::MessageType::Error,
+                        crate::MessageHandler::MessageType::Error,
                         p.line as i64, p.start as i64, &format!("List item must be same as {:?}", data_type));
                     exit(1);
                 }
@@ -363,7 +369,7 @@ impl AST {
 
         if self.advance().identifier != "func" {
             throw_message(&self.filename,
-                crate::MessageHandler::message_handler::MessageType::Error,
+                crate::MessageHandler::MessageType::Error,
                 self.peek().line as i64, self.peek().start as i64,
             "extern declare must be start with 'func' keywords");
             exit(1);
@@ -446,7 +452,7 @@ impl AST {
             let p =self.peek().start;
             throw_message(
                 "stdin",
-                crate::MessageHandler::message_handler::MessageType::Error,
+                crate::MessageHandler::MessageType::Error,
                 l as i64, p as i64,"Using keyword as variable name is forbidden!");
             exit(1);
         }
@@ -457,7 +463,7 @@ impl AST {
                 let p =self.peek().start;
                 throw_message(
                     &self.filename,
-                    crate::MessageHandler::message_handler::MessageType::Error,
+                    crate::MessageHandler::MessageType::Error,
                     l as i64, p as i64,&format!("Can't override to data type: {:?}\nFix this by using 'let' instead.", data_type));
                 exit(1);
             }
@@ -498,7 +504,7 @@ impl AST {
                     let mut macro_queue = VecDeque::from(st);
 
                     let macro_name = macro_queue.pop_front().unwrap();
-                    let mut sub_ast = AST::new(MetaData {filename: self.filename.clone(), tok_data: Vec::from(macro_queue), data: self.meta_data.data.clone()});
+                    let mut sub_ast = AST::new(MetaData {filename: self.filename.clone(), tok_data: Vec::from(macro_queue)});
                     while !sub_ast.is_eof() {
                         vect.push(*sub_ast.expr());
                     }

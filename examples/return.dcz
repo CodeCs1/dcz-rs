@@ -1,0 +1,17 @@
+##
+    Nested return
+##
+
+func test() -> int {
+    int k = 4;
+    int a = 3;
+    if k == a {
+        return 1;
+    }
+    return 0;
+}
+
+func main() -> int {
+    test();
+    return 0;
+}
