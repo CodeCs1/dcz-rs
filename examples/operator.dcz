@@ -1,0 +1,14 @@
+func main() -> int {
+
+    let k: int = 3;
+    int m = 4;
+
+    #k > m;
+    k < m;
+    #k >= m;
+    k <= m;
+    k == m;
+    #k != m;
+
+    return 0;
+}

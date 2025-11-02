@@ -1,0 +1,11 @@
+struct abcxyz {
+    char* name;
+    int id;
+}
+
+func main() -> int {
+    abcxyz k = {
+        name => "abcxyz",
+        id => 2
+    };
+}

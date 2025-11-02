@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, process::exit};
 
-use crate::{AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, Func_Header, VariableData}, MessageHandler::{self, throw_message}, Value::Value, token::{MetaData, TokenData, token_type::TokenType}};
+use crate::{AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, FuncHeader, VariableData}, MessageHandler::{self, MessageType, throw_message}, Value::Value, token::{MetaData, TokenData, token_type::TokenType}};
 pub mod expr_node;
 pub mod ast_checker;
 use expr_node::Expr;
@@ -35,13 +35,12 @@ macro_rules! check_keyword {
 pub struct AST {
     filename: String,
     token: Vec<TokenData>,
-    meta_data: MetaData,
     current: usize,
 }
 
 impl AST {
     pub fn new(meta_data: MetaData) -> Self {
-        Self { token: meta_data.clone().tok_data, current:0, filename: meta_data.clone().filename, meta_data: meta_data.clone() }
+        Self { token: meta_data.clone().tok_data, current:0, filename: meta_data.clone().filename }
 
     }
 
@@ -79,17 +78,15 @@ impl AST {
         })
     }
 
-    fn error(&self, dt: TokenData) -> ! {
-        //MessageHandler::throw_message(source_name, message_type, line, pos, message);
-        panic!()
+    fn error(&self, dt: TokenData, message: &str) -> ! {
+        MessageHandler::throw_message(&self.filename,MessageType::Error, dt.line, dt.end+1, message);
+        exit(1);
     }
 
     fn consume(&mut self, tok_type: TokenType, message: &str) {
         if self.check(tok_type) { self.advance(); }
         else {
-            let p = self.peek();
-            //panic!("{} at {}:{}, Got ({:#?}, which is: {})", message, p.line, p.end, p.tok_type, p.identifier);
-            self.error(p);
+            self.error(self.previous(), message);
         }
     }
 
@@ -115,7 +112,10 @@ impl AST {
             return Box::new(Expr::Var(self.previous().identifier));
         }
 
-        panic!("Expect Expression at {}:{} ({:?})", self.peek().line, self.peek().end, self.peek().tok_type);
+        self.error(
+            self.peek(),
+        format!("Expect expression of {:?}", self.peek().tok_type).as_str()
+        );
     }
 
     fn callee(&mut self) -> Box<Expr> {
@@ -160,6 +160,7 @@ impl AST {
         self.advance(); // eat '<'
 
         let cast_dt = self.primary().to_datatype().expect("Unknown cast data type");
+        self.advance(); // let just eat '*' for now
         self.consume(TokenType::Greater, "Expect '>' in casting");
         return Box::new(Expr::Cast { newdataType: cast_dt, expr: self.expr() })
     }
@@ -178,7 +179,7 @@ impl AST {
                 let n = expr.ident_to_string();
                 return Box::new(Expr::Assign(n, v));
             }
-            panic!("Invaild assignment object");
+            self.error(self.peek(),"Invaild assignment object");
         }
         return expr;
     }
@@ -236,7 +237,7 @@ impl AST {
 
         Box::new(
             Expr::FuncStmt(
-                Func_Header {
+                FuncHeader {
                     name: func_header.0.ident_to_string(),
                     args: func_header.1,
                     return_type: func_header.2.1,
@@ -258,10 +259,10 @@ impl AST {
             }else {
                 if v.to_value().to_datatype() != data_type {
                     let p = self.peek();
-                    throw_message(
+                    MessageHandler::throw_message(
                         &self.filename,
                         crate::MessageHandler::MessageType::Error,
-                        p.line as i64, p.start as i64, &format!("List item must be same as {:?}", data_type));
+                        p.line, p.start, &format!("List item must be same as {:?}", data_type));
                     exit(1);
                 }
             }
@@ -279,6 +280,10 @@ impl AST {
     fn class_stmt(&mut self) -> Box<Expr> {
         self.consume(TokenType::Identifier, "Expect class name as identifier");
         let name = self.previous().identifier;
+
+        if self.check(TokenType::Colon) {
+            self.error(self.peek(), "Not implemented yet!");
+        }
 
         self.consume(TokenType::LeftBrace, "Expect '{' in class definition");
         let mut func_list = Vec::new();
@@ -309,7 +314,11 @@ impl AST {
             if f_name != name &&
                 (class_func_type == ClassFunctionType::Initializer ||
                 class_func_type == ClassFunctionType::Deconstructor) {
-                panic!("Function {:?} name MUST be same as class name!\nExpect function {:?} name: '{}', got '{}'\n", class_func_type,class_func_type,name, f_name);
+                self.error(self.peek(),
+                format!(
+                    "Function {:?} name MUST be same as class name!\nExpect function {:?} name: '{}', got '{}'\n", class_func_type,class_func_type,name, f_name
+                    ).as_str()
+                );
             }
 
             func_list.push(ClassFunction{
@@ -368,9 +377,9 @@ impl AST {
         //extern <func_header>;
 
         if self.advance().identifier != "func" {
-            throw_message(&self.filename,
+            MessageHandler::throw_message(&self.filename,
                 crate::MessageHandler::MessageType::Error,
-                self.peek().line as i64, self.peek().start as i64,
+                self.peek().line, self.peek().start,
             "extern declare must be start with 'func' keywords");
             exit(1);
         }
@@ -380,7 +389,7 @@ impl AST {
         self.consume(TokenType::Semicolon, "Expect ';' after extern function");
 
         Box::new (
-            Expr::Extern(Func_Header {
+            Expr::Extern(FuncHeader {
                 name: func_header.0.ident_to_string(),
                 args: func_header.1,
                 return_type: func_header.2.1,
@@ -451,9 +460,9 @@ impl AST {
             let l =self.peek().line;
             let p =self.peek().start;
             throw_message(
-                "stdin",
+                &self.filename,
                 crate::MessageHandler::MessageType::Error,
-                l as i64, p as i64,"Using keyword as variable name is forbidden!");
+                l, p,"Using keyword as variable name is forbidden!");
             exit(1);
         }
 
@@ -464,7 +473,7 @@ impl AST {
                 throw_message(
                     &self.filename,
                     crate::MessageHandler::MessageType::Error,
-                    l as i64, p as i64,&format!("Can't override to data type: {:?}\nFix this by using 'let' instead.", data_type));
+                    l, p,&format!("Can't override to data type: {:?}\nFix this by using 'let' instead.", data_type));
                 exit(1);
             }
             self.advance();

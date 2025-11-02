@@ -2,13 +2,13 @@
     This AST Checker one will do:
      + passes on some basic optimization including:
         Constant folding
-        Unused variable
+        Unused variable and extern function
         Limit some data type
      + Basic type checking
 
 */
 
-use crate::AST::expr_node::{ClassFunction, Func_Header, VariableData};
+use crate::AST::expr_node::{ClassFunction, FuncHeader, VariableData};
 use crate::{panic_error, Value::Value};
 use crate::MessageHandler::{throw_message, MessageType};
 use super::expr_node::{DataType, Expr};
@@ -27,8 +27,10 @@ pub struct Checker<'a> {
     ast: &'a Vec<Expr>,
     pseudo_variable_stack: Vec<VariableData>, // DataType, Name, is_const, is_ptr, init_v
     pseudo_function_stack: BTreeMap<String, Option<FAST>>,
-    extern_function_stack: HashMap<String, Func_Header>,
-    macro_define: HashMap<String, Vec<Expr>>
+    /// Hashmap (Function Header, is Used)
+    extern_function_stack: BTreeMap<String, (FuncHeader, bool)>,
+    macro_define: HashMap<String, Vec<Expr>>,
+    filename: String
 }
 
 
@@ -153,21 +155,21 @@ pub fn catch_error(r: Result<Option<FAST>, String>) -> Option<FAST> {
     match r {
         Ok(f) => f,
         Err(s) => {
-            panic_error!("stdin", 1, 0, &s);
+            panic_error!("s", 1, 0, &s);
         }
     }
 }
 
 impl<'a> Checker<'a> {
 
-    pub fn new(ast: &'a Vec<Expr>) -> Self {
+    pub fn new(ast: &'a Vec<Expr>, file: String) -> Self {
         Self {
             ast: ast,
             pseudo_variable_stack: Vec::new(),
             pseudo_function_stack: BTreeMap::new(),
-            extern_function_stack: HashMap::new(),
-            macro_define: HashMap::new()
-
+            extern_function_stack: BTreeMap::new(),
+            macro_define: HashMap::new(),
+            filename: file
         }
     }
 
@@ -199,9 +201,17 @@ impl<'a> Checker<'a> {
             },
             Expr::Callee(n, args) => {
 
-                if !self.pseudo_function_stack.contains_key(&n.ident_to_string()){
-                    if !self.extern_function_stack.contains_key(&n.ident_to_string()) {
-                        return Err(format!("Function '{}' not declared!", n.ident_to_string()));
+                let name = n.ident_to_string();
+                if !self.pseudo_function_stack.contains_key(&name) {
+                    if !self.extern_function_stack.contains_key(&name) {
+                        return Err(format!("Function '{}' not declared!", name));
+                    } else {
+                        // set used extern function to true
+                        if
+                        let Some(extern_func)
+                        = self.extern_function_stack.get_mut(&name) {
+                            *extern_func = (extern_func.0.clone(), true)
+                        }
                     }
                 }
 
@@ -255,9 +265,7 @@ impl<'a> Checker<'a> {
                     match check_literal_type(init, dt.clone(), is_p) {
                         Ok(v) => (v.0,v.1,v.2),
                         Err(s) => {
-                            throw_message("source",
-                             MessageType::Error, 1,1 , s.as_str());
-                            exit(1);
+                            panic_error!(&self.filename, 1, 1, s.as_str());
                         }
                     };
 
@@ -303,6 +311,9 @@ impl<'a> Checker<'a> {
 
                 //temporary add args into variable stack
                 self.pseudo_variable_stack.append(&mut f.args.clone());
+
+                //count for 'return' keyword
+
 
                 let fast=FAST {
                     expr: Expr::FuncStmt(f.clone(), Box::new(self.visit(*body)?.unwrap().expr)),
@@ -371,12 +382,12 @@ impl<'a> Checker<'a> {
             Expr::Extern(b) => {
                 //add this into pseudo function stack (used by callee)
 
-                self.extern_function_stack.insert(b.clone().name, b);
+                self.extern_function_stack.insert(b.clone().name, (b,false));
 
                 Ok(
                     Some(FAST {
-                        expr:e, //will be useful for AST2IR
-                        is_used: true
+                        expr:e,
+                        is_used: false
                     })
                 )
             }
@@ -451,6 +462,18 @@ impl<'a> Checker<'a> {
                 }
             }) {
                 original_fast[idx].is_used=true;
+            }
+        }
+
+        for (name, func_header) in self.extern_function_stack.iter() {
+            if let Some(idx) = original_fast.iter().position(|f| {
+                if let Expr::Extern(f) = &f.expr {
+                    f.name == *name && func_header.1
+                } else {
+                    false
+                }
+            }) {
+                original_fast[idx].is_used = true;
             }
         }
 

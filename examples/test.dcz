@@ -1,6 +1,1 @@
-extern func write(int fd, char* buff, int count) -> int;
-func main() -> int {
-    let k =1;
-    write(1, "hello world\n", 12);
-    return 0;
-}
+suu k = "OK";

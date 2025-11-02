@@ -39,7 +39,7 @@ pub struct VariableData {
 }
 
 #[derive(Debug, Clone,PartialEq)]
-pub struct Func_Header {
+pub struct FuncHeader {
     pub name: String,
     pub args: Vec<VariableData>,
     pub return_type: Option<DataType>,
@@ -84,7 +84,7 @@ pub enum Expr {
     IfStmt(Box<Expr>, Box<Expr>, Box<Expr>),
     WhileStmt(Box<Expr>, Box<Expr>),
     /// FuncStmt(name, args, body, return_type)
-    FuncStmt(Func_Header, Box<Expr>),
+    FuncStmt(FuncHeader, Box<Expr>),
     Callee(Box<Expr>, Vec<Expr>),
 
     /// Var declare Statement VarDecl(dt, is_pointer, is_constant, name, initializer)
@@ -93,7 +93,7 @@ pub enum Expr {
     Return(Option<Box<Expr>>),
 
     /// Extern declare statement
-    Extern(Func_Header),
+    Extern(FuncHeader),
     /// class statement
     Class(String, Vec<ClassFunction>),
     /// casting expr

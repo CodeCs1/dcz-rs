@@ -66,7 +66,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let mut p=dcz_ast::new(t?.tokenize());
     let ast_tree = p.parse();
 
-    let mut c = Checker::new(&ast_tree);
+    let mut c = Checker::new(
+        &ast_tree,
+        file_path.to_str().unwrap_or("source").to_string()
+    );
     let expr = c.check()?;
     println!("{:#?}", expr);
 

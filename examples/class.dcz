@@ -2,7 +2,19 @@
     OOP of dcz programming language
 ##
 
+##
+    Class inhert syntax
+
+    class Test : Base {
+        public func override_func() : override {
+
+        }
+    }
+
+##
+
 class Test {
+    public int k;
     public Test() {
 
     }

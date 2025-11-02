@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::{codegen::{llvm::Module, llvm_codegen}, object_out::llvm_object, token::{Token}, AST::{ast_checker::Checker, AST}};
 use std::{fs::File, path::Path};
 fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
@@ -7,7 +8,7 @@ fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
     let mut p=AST::new(t?.tokenize());
     let ast_tree = p.parse();
 
-    let mut c = Checker::new(&ast_tree);
+    let mut c = Checker::new(&ast_tree, file.to_string());
     let expr = c.check()?;
     let binding = Module::new(file.to_string());
     let cg_c = llvm_codegen::LLVMCodegen::compile(expr, &binding);
@@ -21,7 +22,7 @@ fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
 mod test {
     use std::process::Command;
 
-    use crate::{AST::expr_node::{ClassFunction, Expr, Func_Header}, Value::Value, token::{TokenData, token_type::TokenType}};
+    use crate::{AST::expr_node::{ClassFunction, Expr, FuncHeader}, Value::Value, token::{TokenData, token_type::TokenType}};
 
     use super::*;
 
@@ -167,7 +168,7 @@ mod test {
                 ClassFunction {
                     func_type: crate::AST::expr_node::ClassFunctionType::Initializer,
                     access_level: crate::AST::expr_node::AccessLevel::Public,
-                    function: Expr::FuncStmt(Func_Header {
+                    function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "Test".to_string(),
                         is_ptr_dt: false,
@@ -179,7 +180,7 @@ mod test {
                 ClassFunction {
                     func_type: crate::AST::expr_node::ClassFunctionType::Deconstructor,
                     access_level: crate::AST::expr_node::AccessLevel::Public,
-                    function: Expr::FuncStmt(Func_Header {
+                    function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "Test".to_string(),
                         is_ptr_dt: false,
@@ -191,7 +192,7 @@ mod test {
                 ClassFunction {
                     func_type: crate::AST::expr_node::ClassFunctionType::Function,
                     access_level: crate::AST::expr_node::AccessLevel::Private,
-                    function: Expr::FuncStmt(Func_Header {
+                    function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "private_function".to_string(),
                         is_ptr_dt: false,
@@ -203,7 +204,7 @@ mod test {
                 ClassFunction {
                     func_type: crate::AST::expr_node::ClassFunctionType::Function,
                     access_level: crate::AST::expr_node::AccessLevel::Public,
-                    function: Expr::FuncStmt(Func_Header {
+                    function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "public_function".to_string(),
                         is_ptr_dt: false,

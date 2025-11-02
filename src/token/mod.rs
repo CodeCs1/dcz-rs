@@ -1,9 +1,8 @@
+#![allow(dead_code)]
 use std::{fs::File, io::Read, path::Path, process::exit};
-
 use token_type::TokenType;
-
 use crate::{
-    MessageHandler::{MessageType, throw_message},
+    MessageHandler::{self, MessageType},
     Value::Value,
 };
 pub mod token_type;
@@ -283,11 +282,11 @@ impl Token {
             '"' => {
                 while self.peek() != '"' && !self.is_eof() {
                     if self.peek() == '\n' {
-                        throw_message(
+                        MessageHandler::throw_message(
                             &self.source_file_name,
                             MessageType::Error,
-                            self.line as i64,
-                            self.at as i64,
+                            self.line,
+                            self.at,
                             "Invaild string literal format",
                         );
                         exit(1);
@@ -296,11 +295,11 @@ impl Token {
                 }
 
                 if self.is_eof() {
-                    throw_message(
+                    MessageHandler::throw_message(
                         &self.source_file_name,
                         MessageType::Error,
-                        self.line as i64,
-                        self.at as i64,
+                        self.line,
+                        self.at,
                         "Unterminated string literal",
                     );
                     exit(1);
@@ -354,11 +353,11 @@ impl Token {
                 // char support
                 self.advance();
                 if !self.match_chr('\'') {
-                    throw_message(
+                    MessageHandler::throw_message(
                         &self.source_file_name,
                         MessageType::Error,
-                        self.line as i64,
-                        self.at as i64,
+                        self.line,
+                        self.at,
                         "Invaild char format!",
                     );
                     exit(1);
@@ -402,11 +401,11 @@ impl Token {
                 None
             }
             _ => {
-                throw_message(
+                MessageHandler::throw_message(
                     &self.source_file_name,
                     MessageType::Error,
-                    self.at as i64,
-                    self.current as i64,
+                    self.line,
+                    self.at,
                     &format!("Unknown token: {}", curr_char),
                 );
                 exit(1);

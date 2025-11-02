@@ -1,5 +1,7 @@
 //simple llvm wrapper for dcz
 
+#![allow(dead_code)]
+
 use std::{ffi::{CStr, CString}, marker::PhantomData, ops::Deref};
 
 use llvm_sys_201::{
@@ -451,9 +453,6 @@ impl <'llvm>LlvmValue<'llvm> {
     #[inline]
     fn value_ref(&self) -> LLVMValueRef {
         self.0
-    }
-
-    fn change2(&self, new: LlvmValue<'llvm>) {
     }
 
 

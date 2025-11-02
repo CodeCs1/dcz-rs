@@ -1,0 +1,9 @@
+extern func printf(char* c);
+func main() -> int {
+    int k = 3;
+    int m = k+1;
+    if m == k+1 printf("OK");
+    else printf("Test failed");
+
+    return 0;
+}

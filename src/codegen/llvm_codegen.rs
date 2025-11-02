@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{codegen::llvm::{Builder, FnValue, LlvmValue, Module, Type}, token::token_type::TokenType, Value::Value, AST::expr_node::{DataType, Expr, Func_Header}};
+use crate::{codegen::llvm::{Builder, FnValue, LlvmValue, Module, Type}, token::token_type::TokenType, Value::Value, AST::expr_node::{DataType, Expr, FuncHeader}};
 
 pub struct LLVMCodegen <'llvm>{
     exprs: Vec<Expr>,
@@ -88,7 +88,7 @@ impl<'llvm> LLVMCodegen<'llvm> {
         }
     }
 
-    fn extern_codegen(&self,f: Func_Header) -> TypeValue<'llvm> {
+    fn extern_codegen(&self,f: FuncHeader) -> TypeValue<'llvm> {
         let mut args_dt = Vec::new();
         for x in f.clone().args {
             args_dt.push( self.dczdt_2_llvmdt(x.dt,x.is_ptr));
@@ -142,6 +142,11 @@ impl<'llvm> LLVMCodegen<'llvm> {
                     TokenType::EqualEqual => {
                         TypeValue::LLVMValue(
                             self.builder.cmp(lhs.into(),llvm_sys_201::LLVMIntPredicate::LLVMIntEQ,rhs.into())
+                        )
+                    },
+                    TokenType::LessEqual => {
+                        TypeValue::LLVMValue(
+                            self.builder.cmp(lhs.into(),llvm_sys_201::LLVMIntPredicate::LLVMIntSLE,rhs.into())
                         )
                     }
                     TokenType::Less => {

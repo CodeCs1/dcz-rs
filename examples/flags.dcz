@@ -1,0 +1,4 @@
+#[UseC]
+func k() -> int {
+    
+}

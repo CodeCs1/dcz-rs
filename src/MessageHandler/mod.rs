@@ -1,7 +1,6 @@
 /*
- * <source_name>:<line>:<pos>: <message type>: message
- *
- *
+ * <message type>
+ * at <filename>
  * */
 
 #![allow(dead_code)]
@@ -26,7 +25,7 @@ impl Display for MessageType {
     }
 }
 
-pub fn throw_message(source_name: &str,message_type: MessageType, line: i64, pos: i64, message: &str) {
+pub fn throw_message(source_name: &str,message_type: MessageType, line: usize, pos:usize, message: &str) {
     eprintln!("{}: {}\nat {}", message_type, message, format!("{}:{}:{}", source_name,line,pos).bold())
 }
 
