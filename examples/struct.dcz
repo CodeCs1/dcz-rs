@@ -1,9 +1,9 @@
 struct abcxyz {
-    char* name;
-    int id;
+    i8* name;
+    i32 id;
 }
 
-func main() -> int {
+func main() -> i32 {
     abcxyz k = {
         name => "abcxyz",
         id => 2

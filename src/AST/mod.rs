@@ -3,7 +3,7 @@ use std::{collections::VecDeque, process::exit};
 use crate::{AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, FuncHeader, VariableData}, MessageHandler::{self, MessageType, throw_message}, Value::Value, token::{MetaData, TokenData, token_type::TokenType}};
 pub mod expr_node;
 pub mod ast_checker;
-use expr_node::Expr;
+use expr_node::{Expr, Variable};
 
 macro_rules! create_binary {
     ($self:ident, $name: ident, $lhs: expr, $tok_list: expr, $rhs: expr) => {
@@ -23,7 +23,7 @@ macro_rules! create_binary {
 
 
 macro_rules! check_keyword {
-    ($self:ident, $keyword: expr, $func: expr) => {
+    ($self:ident, $keyword: expr_2021, $func: expr_2021) => {
         if $self.peek().identifier == $keyword {
             $self.advance();
             return $func;
@@ -190,7 +190,7 @@ impl AST {
         return Box::new(Expr::WhileStmt(expr, body));
     }
 
-    fn func_header(&mut self) -> (Box<Expr>, Vec<VariableData>, (bool, Option<DataType>)){
+    fn func_header(&mut self) -> (Box<Expr>, Vec<Variable>, (bool, Option<DataType>)){
         let func_name = self.primary();
 
         self.consume(TokenType::LeftParen, "Expect '(' in declare func");
@@ -200,7 +200,16 @@ impl AST {
             let dt = self.primary().to_datatype().expect("Expect data type - FuncStmt");
             let is_ptr = self.match_token(&mut vec![TokenType::Star]);
             let name = self.primary().ident_to_string();
-            arg_v.push(VariableData { dt: dt, name:name, is_const: false, is_ptr: is_ptr, init: None, is_used: true });
+            arg_v.push(Variable{
+                vData: VariableData { 
+                    dt, 
+                    isConst: false, 
+                    isPtr: is_ptr,
+                    isUnsigned: false },
+                init: None,
+                name,
+                is_used: false,
+            });
             if !self.check(TokenType::RightParen) {
                 self.consume(TokenType::Comma, "Expect ',' in arguments declare");
             }
@@ -488,10 +497,10 @@ impl AST {
             if matches!(data_type, DataType::Unknown) && matches!(*i, Expr::Literal(_)) {
                 let v = i.to_value();
                 if !v.clone().is_null() {
-                    data_type = if v.clone().is_char() { DataType::Char }
-                            else if v.clone().is_double() {DataType::Suu}
-                            else if v.clone().is_float() {DataType::Float}
-                            else if v.clone().is_literal() {DataType::Long}
+                    data_type = if v.clone().is_char() { DataType::I8 }
+                            else if v.clone().is_double() {DataType::F64}
+                            else if v.clone().is_float() {DataType::F32}
+                            else if v.clone().is_literal() {DataType::I32}
                             else {DataType::Unknown}
                 }
             }

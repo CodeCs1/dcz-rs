@@ -1,4 +1,4 @@
-#[UseC]
-func k() -> int {
+@UseC
+func k() -> i32 {
     
 }

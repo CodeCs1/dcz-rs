@@ -64,17 +64,17 @@ impl<'llvm> LLVMCodegen<'llvm> {
                 }
                 t
             }
-            DataType::Int => {
+            DataType::I32 => {
                 let mut t = self.module.type_i32();
                 if is_ptr {
                     t.to_pointer();
                 }
                 t
             }
-            DataType::Long => {
+            DataType::I64 => {
                 self.module.type_i64()
             }
-            DataType::Char => {
+            DataType::I8 => {
 
                 let mut t = self.module.type_char();
                 if is_ptr {
@@ -91,7 +91,7 @@ impl<'llvm> LLVMCodegen<'llvm> {
     fn extern_codegen(&self,f: FuncHeader) -> TypeValue<'llvm> {
         let mut args_dt = Vec::new();
         for x in f.clone().args {
-            args_dt.push( self.dczdt_2_llvmdt(x.dt,x.is_ptr));
+            args_dt.push( self.dczdt_2_llvmdt(x.vData.dt,x.vData.isPtr));
         }
         let fun = self.module.type_fn(&mut args_dt,
             {
@@ -239,7 +239,7 @@ impl<'llvm> LLVMCodegen<'llvm> {
                 for i in 0..f.args() {
                     let args_var = &header.args[i];
                     let ptr_name = args_var.name.clone() + "_ptr";
-                    let args_type = self.dczdt_2_llvmdt(args_var.dt.clone(), args_var.is_ptr);
+                    let args_type = self.dczdt_2_llvmdt(args_var.vData.dt.clone(), args_var.vData.isPtr);
                     let alloca= self.builder.alloca(args_type, &ptr_name);
 
                     self.builder.store(f.arg(i), alloca);

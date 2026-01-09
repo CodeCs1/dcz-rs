@@ -1,7 +1,7 @@
-func main() -> int {
+func main() -> i32 {
 
-    let k: int = 3;
-    int m = 4;
+    let k: i32 = 3;
+    i32 m = 4;
 
     #k > m;
     k < m;

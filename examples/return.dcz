@@ -3,15 +3,15 @@
 ##
 
 ##
-    func test() -> int {
+    func test() -> i32 {
         if a == 3 return 0;
         return 1;
     }
 
     LLVM based:
 
-    func test() -> int {
-        int ret1 = 1;
+    func test() -> i32 {
+        i32 ret1 = 1;
         if a == 3 ret1 = 0;
         return 1;
     }
@@ -19,11 +19,11 @@
 ##
 
 
-func test() -> char* { return "OK"; }
+func test() -> i8* { return "OK"; }
 
-extern func printf(char* str) -> int;
+extern func pri32f(i8* str) -> i32;
 
-func main() -> int {
-    printf(test());
+func main() -> i32 {
+    pri32f(test());
     return 0;
 }

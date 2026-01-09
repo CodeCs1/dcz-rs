@@ -1,7 +1,7 @@
-extern func printf(char* c);
+extern func printf(i8* c);
 func main() -> int {
-    int k = 3;
-    int m = k+1;
+    i32 k = 3;
+    i32 m = k+1;
     if m == k+1 printf("OK");
     else printf("Test failed");
 

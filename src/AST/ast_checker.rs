@@ -8,12 +8,28 @@
 
 */
 
+
 use crate::AST::expr_node::{ClassFunction, FuncHeader, VariableData};
 use crate::{panic_error, Value::Value};
 use crate::MessageHandler::{throw_message, MessageType};
-use super::expr_node::{DataType, Expr};
+use super::expr_node::{DataType, Expr, Variable};
 use std::collections::{BTreeMap, HashMap};
 use std::process::exit;
+
+macro_rules! rolling_back_dt {
+    ($dt: ident, $vi64: ident, $v: ident) => {
+        if $vi64 > $dt::MAX as f64 {
+            throw_message("source", MessageType::Warning, 1, 0, format!("datatype overflow, rolling back from {} to {}",
+            $vi64, $vi64%$dt::MAX as f64).as_str());
+        }
+        $v=Expr::Literal(
+            crate::Value::Value::Number(
+            ($vi64%$dt::MAX as f64) as i64
+            )
+        );
+    };
+}
+
 
 #[derive(Debug, Clone,PartialEq)]
 pub struct FAST { // AST formatter
@@ -22,10 +38,9 @@ pub struct FAST { // AST formatter
 }
 
 
-
 pub struct Checker<'a> {
     ast: &'a Vec<Expr>,
-    pseudo_variable_stack: Vec<VariableData>, // DataType, Name, is_const, is_ptr, init_v
+    pseudo_variable_stack: Vec<Variable>, // DataType, Name, is_const, is_ptr, init_v
     pseudo_function_stack: BTreeMap<String, Option<FAST>>,
     /// Hashmap (Function Header, is Used)
     extern_function_stack: BTreeMap<String, (FuncHeader, bool)>,
@@ -57,15 +72,12 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
 
         if to_v.clone().is_string() {
             if matches!(dt, DataType::Unknown) { // 'let' keyword
-                return Ok((Some(Box::new(v)), DataType::Char, true));
+                return Ok((Some(Box::new(v)), DataType::I8, true));
             }
             if !is_ptr {
-                if matches!(dt, DataType::Suu) {
-                    println!("[Suu]: Get that trash outta my face");
-                }
                 return Err(format!("Cannot convert from {:?} to string literal (variable MUST be pointer and data type MUST be char)", data_type.clone()));
             }
-            if is_ptr && !matches!(dt, DataType::Char) {
+            if is_ptr && (!matches!(dt, DataType::I8)  && !matches!(dt, DataType::U8)) {
                 return Err(format!("Cannot convert from {:?}* to string literal (data type MUST be char)", dt.clone()));
             }
         }
@@ -85,66 +97,36 @@ fn check_literal_type(init: Option<Box<Expr>>, dt: DataType, is_ptr: bool) ->
 
 
         match dt {
-            DataType::Char => {
-                if vi64 > u8::MAX as f64 {
-                    throw_message("source", MessageType::Warning, 1, 0, format!("char overflow, rolling back from {} to {}",
-                    vi64, vi64%u8::MAX as f64).as_str());
-                }
-                v=Expr::Literal(
-                    crate::Value::Value::Number(
-                    (vi64%256 as f64) as i64
-                    )
-                );
+            DataType::I8 => {
+                rolling_back_dt!(i8, vi64,v);
             },
-            DataType::Short => {
-                if vi64 > i16::MAX as f64 {
-                    throw_message("source", MessageType::Warning, 1, 0, format!("short overflow, rolling back from {} to {}",
-                    vi64, vi64%i16::MAX as f64).as_str());
-                }
-                v=Expr::Literal(
-                    crate::Value::Value::Number(
-                        (v.to_value().to_literal()%i16::MAX as i64) as i64
-                    )
-                )
+            DataType::I16 => {
+                rolling_back_dt!(i16, vi64,v);
             },
-            DataType::Int => {
-                if vi64 > i32::MAX as f64 {
-                    throw_message("source", MessageType::Warning, 1, 0, format!("int overflow, rolling back from {} to {}",
-                        vi64, vi64%i32::MAX as f64).as_str());
-                }
-                v=Expr::Literal(
-                    crate::Value::Value::Number(
-                    (vi64 % i32::MAX as f64) as i64
-                    )
-                )
+            DataType::I32 => {
+                rolling_back_dt!(i32, vi64,v);
             },
-            DataType::Suu => {
-                if vi64 > f64::MAX as f64 {
-                    throw_message("source", MessageType::Warning, 1, 0, format!("suu (double) overflow, rolling back from {} to {}",
-                        vi64, vi64%f64::MAX as f64).as_str());
-                }
-                v=Expr::Literal(
-                    crate::Value::Value::Double(
-                    vi64 % f64::MAX as f64
-                    )
-                )
-            }
+            DataType::I64 => {
+                rolling_back_dt!(i64, vi64,v);
+            },
 
-            DataType::Long=> {
-                if vi64 > i64::MAX as f64 {
-                    throw_message("source", MessageType::Warning, 1, 0, format!("suu (double) overflow, rolling back from {} to {}",
-                        vi64, vi64%i64::MAX as f64).as_str());
-                }
-                v=Expr::Literal(
-                    crate::Value::Value::Number(
-                    vi64 as i64 % i64::MAX
-                    )
-                )
-            }
+            DataType::U8 => {
+                rolling_back_dt!(u8, vi64,v);
+            },
+            DataType::U16 => {
+                rolling_back_dt!(u16, vi64,v);
+            },
+            DataType::U32 => {
+                rolling_back_dt!(u32, vi64,v);
+            },
+            DataType::U64 => {
+                rolling_back_dt!(u64, vi64,v);
+            },
+
             DataType::Unknown => {
                 data_type=v.to_value().to_datatype();
-            }
-            o => todo!("Data Type {:?} not yet implemented", o)
+            },
+            o => todo!("Data type \"{:#?}\" not yet implemented!.", o)
         }
         init_v = Some(Box::new(v));
     }
@@ -277,7 +259,19 @@ impl<'a> Checker<'a> {
                 let k = self.visit(*init_v.clone().unwrap())?.unwrap();
 
                 self.pseudo_variable_stack.push(
-                    VariableData { dt: dt, name: n.clone(), is_const: is_const, is_ptr: is_p, init: Some(k.clone().expr), is_used: false }
+                    //VariableData { dt: dt, name: n.clone(), is_const: is_const, is_ptr: is_p, init: Some(k.clone().expr), is_used: false }
+
+                    Variable { 
+                        vData: VariableData { 
+                            dt, 
+                            isConst: is_const, 
+                            isPtr: is_p, 
+                            isUnsigned: false 
+                        }, 
+                        name: n.clone(), 
+                        init: Some(k.clone().expr), 
+                        is_used: false 
+                    }
                 );
                 Ok(Some(FAST { expr: Expr::VarDecl(data_type, is_str,is_const, n, Some(Box::new(k.expr))), is_used: false }))
             },
@@ -289,11 +283,11 @@ impl<'a> Checker<'a> {
                 } else {
                     let assign = self.pseudo_variable_stack.iter().find(|v| v.name == n).unwrap();
 
-                    if assign.is_const {
+                    if assign.vData.isConst {
                         return Err(format!("Constant variable '{}' cannot be assignable!", n));
                     }
                     let init_v =
-                        if let Ok(v) = check_literal_type(Some(v), assign.dt.clone(), assign.is_ptr) {
+                        if let Ok(v) = check_literal_type(Some(v), assign.vData.dt.clone(), assign.vData.isPtr) {
                             v.0.unwrap()
                         } else {
                             exit(1);

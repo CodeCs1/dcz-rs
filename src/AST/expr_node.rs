@@ -5,35 +5,45 @@ use crate::{token::TokenData, Value::{self}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum DataType {
-    Char,
-    Short,
-    Int,
-    Long,
-    Float,
-    Suu, // replace for double data type
+    I8,
+    I16,
+    I32,
+    I64,
+    U8,
+    U16,
+    U32,
+    U64,
+    F32,
+    F64,
     Void,
     Unknown
-
 }
 
 impl DataType {
     pub fn size(&self) -> u32 {
         match self {
-            DataType::Char => 1,
-            DataType::Short => 2,
-            DataType::Int | DataType::Float => 4,
-            DataType::Long | DataType::Suu => 8,
+            DataType::U8 | DataType::I8 => 1,
+            DataType::U16 | DataType::I16 => 2,
+            DataType::U32 | DataType::I32 | DataType::F32 => 4,
+            DataType::U64 | DataType::I64 | DataType::F64 => 8,
             _ => 0
         }
     }
 }
 
+// i32 <name>*
 #[derive(Debug, Clone, PartialEq)]
 pub struct VariableData {
     pub dt: DataType,
+    pub isConst: bool,
+    pub isPtr: bool,
+    pub isUnsigned: bool,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Variable {
+    pub vData: VariableData,
     pub name: String,
-    pub is_const: bool,
-    pub is_ptr: bool,
     pub init: Option<Expr>,
     pub is_used: bool,
 }
@@ -41,7 +51,7 @@ pub struct VariableData {
 #[derive(Debug, Clone,PartialEq)]
 pub struct FuncHeader {
     pub name: String,
-    pub args: Vec<VariableData>,
+    pub args: Vec<Variable>,
     pub return_type: Option<DataType>,
     pub is_ptr_dt: bool
 }
@@ -153,24 +163,8 @@ impl<'a> Expr
             Expr::Var(_) => self.clone(),
             Expr::Statement(st) => st.visit(),
             Expr::Callee(_, _) => self.clone(),
-            Expr::Cast { newdataType, expr } => {
-                match newdataType {
-                    DataType::Int => {
-                        let e = *expr.clone();
-                        if let Expr::Literal(n) = e{
-                            match n.clone().to_datatype() {
-                                DataType::Char => Expr::Literal(Value::Value::Number(n.to_char() as i64)),
-                                DataType::Short => Expr::Literal(Value::Value::Number(n.to_literal() as i64)),
-                                DataType::Float => Expr::Literal(Value::Value::Number(n.to_float() as i64)),
-                                DataType::Int => Expr::Literal(n),
-                                _ => todo!("not impl data type {:?} yet", n.clone().to_datatype())
-                            }
-                        }else {
-                            self.clone()
-                        }
-                    }
-                    _ => self.clone()
-                }
+            Expr::Cast { newdataType:_, expr:_ } => {
+                todo!("Not yet updated");
             }
             o => todo!("Expr visit does not implement {:?} yet ", o)
         }
@@ -189,7 +183,7 @@ impl<'a> Expr
             _ => "".to_string()
         }
     }
-    pub fn get_function(&self) -> (String, Vec<VariableData>, Box<Expr>, Option<DataType>) {
+    pub fn get_function(&self) -> (String, Vec<Variable>, Box<Expr>, Option<DataType>) {
         match self {
             Expr::FuncStmt(func_header, body ) => {
                 (func_header.name.clone(),
@@ -211,12 +205,18 @@ impl<'a> Expr
         match self {
             Expr::Identifier(n) => {
                 match n.as_str() {
-                    "char" => Ok(DataType::Char),
-                    "short" => Ok(DataType::Short),
-                    "int" => Ok(DataType::Int),
-                    "long" => Ok(DataType::Long),
-                    "float" => Ok(DataType::Float),
-                    "suu" => Ok(DataType::Suu),
+                    "i8" => Ok(DataType::I8),
+                    "i16" => Ok(DataType::I16),
+                    "i32" => Ok(DataType::I32),
+                    "i64" => Ok(DataType::I64),
+
+                    "u8" =>  Ok(DataType::U8),
+                    "u16" => Ok(DataType::U16),
+                    "u32" => Ok(DataType::U32),
+                    "u64" => Ok(DataType::U64),
+
+                    "f32" => Ok(DataType::F32),
+                    "f64" => Ok(DataType::F64),
                     "void" => Ok(DataType::Void),
                     _ => Ok(DataType::Unknown)
                 }

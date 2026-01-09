@@ -1,12 +1,12 @@
-extern func printf(char* str) -> int;
+extern func printf(i8* str) -> i32;
 
-func recur(int n) -> int {
+func recur(i32 n) -> i32 {
     if n < 0 { return n; }
 
     return recur(n-1);
 }
 
-func main() -> int {
+func main() -> i32 {
     recur(3);
     return 0;
 }

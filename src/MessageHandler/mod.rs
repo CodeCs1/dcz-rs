@@ -31,7 +31,7 @@ pub fn throw_message(source_name: &str,message_type: MessageType, line: usize, p
 
 #[macro_export]
 macro_rules! panic_error {
-    ($source: expr, $line: expr, $pos: expr, $message: expr) => {
+    ($source: expr_2021, $line: expr_2021, $pos: expr_2021, $message: expr_2021) => {
         throw_message($source, MessageType::Error, $line, $pos, $message);
         exit(1)
     };

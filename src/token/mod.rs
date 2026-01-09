@@ -375,8 +375,10 @@ impl Token {
 
                 let data_type_kw = vec![
                     // data type
-                    "int", "float", "suu", "char", "short", "long", "const", "void",
-                ];
+                    "i8", "i16", "i32", "i64", "u8",
+                    "u16", "u32", "u64", "void", "const",
+                    "f32", "f64"
+                ]; // let be serious rn (replace 'suu' with f64)
 
                 while self.peek().is_alphanumeric() || self.peek() == '_' {
                     self.advance();

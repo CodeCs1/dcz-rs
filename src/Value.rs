@@ -257,13 +257,13 @@ impl Value {
 
     pub fn to_datatype(self) -> DataType {
         if matches!(self, Self::Double(_)) {
-            DataType::Suu
+            DataType::F64
         } else if matches!(self, Self::Boolean(_)) || matches!(self, Self::Char(_)) {
-            DataType::Char
+            DataType::I8
         } else if matches!(self, Self::Number(_)) {
-            DataType::Int
+            DataType::I32
         } else if matches!(self, Self::Float(_)) {
-            DataType::Float
+            DataType::F32
         }
         else {
             DataType::Unknown

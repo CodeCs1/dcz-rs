@@ -1,5 +1,5 @@
-extern func printf(char* str);
-func main() -> int {
+extern func printf(i8* str);
+func main() -> i32 {
     printf("OK");
     return 0;
 }

@@ -1,11 +1,11 @@
-func fib(int n) -> int {
+func fib(i32 n) -> i32 {
     if n <= 1 {
         return n;
     }
     return fib(n-1) + fib(n-2);
 }
     
-func main() -> int {
+func main() -> i32 {
     fib(3);
 
     return 0;

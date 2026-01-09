@@ -14,7 +14,7 @@
 ##
 
 class Test {
-    public int k;
+    public i32 k;
     public Test() {
 
     }
