@@ -1,4 +1,7 @@
 # dcz (DucaZcript)
+
+This is not completed yet!
+
 A basic compiler programming language that share the similarity with C/C++ lang.
 
 ## Installation
@@ -16,8 +19,8 @@ $ dcz foobar.dcz -o foobar.o
 ## Sample code
 This is a working code for printing a simple "Hello World"
 ```
-extern func printf(char* str);
-func main() -> int {
+extern func printf(i8* str);
+func main() -> i32 {
     printf("hello world\n");
     return 0;
 }
@@ -32,6 +35,7 @@ Pull requests are welcome. For major changes, please open an issue first
 to discuss what you would like to change.
 
 ## Roadmap
+- [ ] Link object file to executable
 - [ ] Support `struct` and `class`
 - [ ] Actually complete the AST Checker
 - [ ] Support signed and unsigned data type

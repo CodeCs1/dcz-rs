@@ -1,5 +1,5 @@
 
-#[derive(Debug, PartialEq, Clone,Eq)]
+#[derive(Debug, PartialEq, Clone,Eq,Copy)]
 pub enum TokenType {
     Identifier,
     Keywords,

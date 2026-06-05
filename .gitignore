@@ -4,3 +4,4 @@ gitpush.sh
 Cargo.lock
 test
 *.kate*
+.vscode

@@ -1,21 +1,21 @@
 use std::{collections::VecDeque, process::exit};
 
-use crate::{AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, FuncHeader, VariableData}, MessageHandler::{self, MessageType, throw_message}, Value::Value, token::{MetaData, TokenData, token_type::TokenType}};
+use crate::{AST::expr_node::{AccessLevel, ClassFunction, ClassFunctionType, DataType, ExprBuilder, FuncHeader, VariableType}, MessageHandler::{self, MessageType, throw_message}, Value::{TypedValue, Value}, token::{MetaData, TokenData, token_type::TokenType}};
 pub mod expr_node;
 pub mod ast_checker;
+pub mod VarEnvironment;
 use expr_node::{Expr, Variable};
 
 macro_rules! create_binary {
     ($self:ident, $name: ident, $lhs: expr, $tok_list: expr, $rhs: expr) => {
-        fn $name(&mut $self) -> Box<Expr> {
+        fn $name(&mut $self) -> Expr {
             let mut lhs = $lhs;
 
-            while $self.match_token(&mut $tok_list) {
+            while $self.match_token(&mut $tok_list).is_some() {
                 let op = $self.previous();
                 let rhs = $rhs;
-                lhs = Box::new(Expr::Binary(lhs, op, rhs));
+                lhs = Expr::new_binary(lhs, op, rhs);
             }
-
             lhs
         }
     };
@@ -67,15 +67,19 @@ impl AST {
 
     }
 
-    fn match_token(&mut self, types: &mut Vec<TokenType>) -> bool {
-        types.iter_mut().any(|f| {
+    fn match_token(&mut self, types: &mut Vec<TokenType>) -> Option<TokenData> {
+        /*types.iter_mut().any(|f| {
             if self.check(f.clone()) {
-                self.advance();
-                true
+                Some(self.advance());
             } else {
-                false
+                None
             }
-        })
+        })*/
+        if types.iter().any(|&f| self.check(f)) {
+            Some(self.advance())
+        } else {
+            None
+        }
     }
 
     fn error(&self, dt: TokenData, message: &str) -> ! {
@@ -90,26 +94,23 @@ impl AST {
         }
     }
 
-    fn primary(&mut self) -> Box<Expr> {
-        if self.match_token(&mut vec![TokenType::Number, TokenType::String, TokenType::Char]) {
-            return Box::new(Expr::Literal(self.previous().value));
+    fn primary(&mut self) -> Expr {
+        if self.match_token(&mut vec![TokenType::Number, TokenType::String, TokenType::Char]).is_some() {
+            return Expr::new_terminal(self.previous(),expr_node::TerminalType::Literal)
         }
-        if self.match_token(&mut vec![TokenType::LeftParen]) {
+        if self.match_token(&mut vec![TokenType::LeftParen]).is_some() {
             let expr = self.expr();
             self.consume(TokenType::RightParen, "Expect ')'");
-            return Box::new(Expr::Grouping(expr));
+            return Expr::new_group(expr);
         }
-
-        if self.match_token(&mut vec![TokenType::Keywords, TokenType::DataType]) {
-            return Box::new(Expr::Identifier(self.previous().identifier));
+        if self.match_token(&mut vec![TokenType::Keywords, TokenType::DataType]).is_some() {
+            return Expr::new_terminal(self.previous(),expr_node::TerminalType::Identifier);
         }
-
-        if self.match_token(&mut vec![TokenType::LeftBracket]) {
+        if self.match_token(&mut vec![TokenType::Identifier]).is_some() {
+            return Expr::new_terminal(self.previous(),expr_node::TerminalType::Var);
+        }
+        if self.match_token(&mut vec![TokenType::LeftBracket]).is_some() {
             return self.list();
-        }
-
-        if self.match_token(&mut vec![TokenType::Identifier]) {
-            return Box::new(Expr::Var(self.previous().identifier));
         }
 
         self.error(
@@ -118,29 +119,30 @@ impl AST {
         );
     }
 
-    fn callee(&mut self) -> Box<Expr> {
+    fn callee(&mut self) -> Expr {
         let mut primary = self.primary();
-        if self.match_token(&mut vec![TokenType::LeftParen]) {
+        if self.match_token(&mut vec![TokenType::LeftParen]).is_some() {
             let mut arg_v = Vec::new();
             while !self.check(TokenType::RightParen) {
-                arg_v.push(*self.expr());
+                arg_v.push(self.expr());
                 if !self.check(TokenType::RightParen) {
                     self.consume(TokenType::Comma, "Expect ',' in parameter declare");
                 }
             }
             self.consume(TokenType::RightParen, "Expect ')' after callee");
-            primary = Box::new(Expr::Callee(primary, arg_v));
+            primary = Expr::new_callee(primary, arg_v);
         }
         primary
     }
 
-    fn unary(&mut self) -> Box<Expr> {
-        if self.match_token(&mut vec![TokenType::Not, TokenType::Minus]) {
+    fn unary(&mut self) -> Expr {
+        if self.match_token(&mut vec![TokenType::Not, TokenType::Minus]).is_some() {
             let op = self.previous();
             let expr = self.unary();
-            return Box::new(Expr::Unary(op, expr));
+            Expr::new_unary(op, expr)
+        } else{
+            self.callee()
         }
-        self.callee()
     }
 
     // very rust
@@ -152,7 +154,7 @@ impl AST {
     create_binary!(self, logical, self.equal(), vec![TokenType::Or, TokenType::And], self.equal());
     create_binary!(self, bool_logical, self.logical(), vec![TokenType::OrBool, TokenType::AndBool], self.logical());
 
-    fn casting(&mut self) -> Box<Expr> {
+    fn casting(&mut self) -> Expr {
         // let k = <int>34.1; <- this will be cast in compile time
         // let k = <A*>0x12; <- this will be cast in runtime, where A is sturct or class
         if !self.check(TokenType::Less) { return self.assignment() }
@@ -160,23 +162,26 @@ impl AST {
         self.advance(); // eat '<'
 
         let cast_dt = self.primary().to_datatype().expect("Unknown cast data type");
-        self.advance(); // let just eat '*' for now
+        let is_pointer = if self.peek().tok_type == TokenType::Star {
+            self.advance();
+            true
+        } else {false};
         self.consume(TokenType::Greater, "Expect '>' in casting");
-        return Box::new(Expr::Cast { newdataType: cast_dt, expr: self.expr() })
+
+        return Box::new(Expr::Cast(VariableType::new(cast_dt,is_pointer,false), self.expr()))
     }
 
-    fn expr(&mut self) -> Box<Expr> {
+    fn expr(&mut self) -> Expr {
         self.casting()
     }
 
-    fn assignment(&mut self) -> Box<Expr> {
+    fn assignment(&mut self) -> Expr {
         let expr = self.bool_logical();
 
         if self.match_token(&mut vec![TokenType::Equal]) {
             let v = self.assignment();
 
-            if matches!(*expr, Expr::Var(_)) {
-                let n = expr.ident_to_string();
+            if let Expr::Var(n) = *expr {
                 return Box::new(Expr::Assign(n, v));
             }
             self.error(self.peek(),"Invaild assignment object");
@@ -184,13 +189,13 @@ impl AST {
         return expr;
     }
 
-    fn while_stmt(&mut self) -> Box<Expr> {
+    fn while_stmt(&mut self) -> Expr {
         let expr = self.expr();
         let body = self.statement();
         return Box::new(Expr::WhileStmt(expr, body));
     }
 
-    fn func_header(&mut self) -> (Box<Expr>, Vec<Variable>, (bool, Option<DataType>)){
+    fn func_header(&mut self) -> (Expr, Vec<Variable>, Option<VariableType>){
         let func_name = self.primary();
 
         self.consume(TokenType::LeftParen, "Expect '(' in declare func");
@@ -199,13 +204,10 @@ impl AST {
         while !self.check(TokenType::RightParen) {
             let dt = self.primary().to_datatype().expect("Expect data type - FuncStmt");
             let is_ptr = self.match_token(&mut vec![TokenType::Star]);
+
             let name = self.primary().ident_to_string();
             arg_v.push(Variable{
-                vData: VariableData { 
-                    dt, 
-                    isConst: false, 
-                    isPtr: is_ptr,
-                    isUnsigned: false },
+                vData: VariableType::new(dt,is_ptr,false),
                 init: None,
                 name,
                 is_used: false,
@@ -218,17 +220,26 @@ impl AST {
         self.consume(TokenType::RightParen, "Expect ')' in declare func");
 
         let return_type = if self.match_token(&mut vec![TokenType::PointTo]) {
-            Some(self.primary().to_datatype().expect("Invaild data type"))
+            Some(
+                self.primary().to_datatype().expect("Invaild data type")
+            )
         } else {
             None
         };
 
         let is_ptr = self.match_token(&mut vec![TokenType::Star]);
 
-        (func_name, arg_v, (is_ptr,return_type))
+        let vt = match return_type {
+            Some(dt) => Some(
+                VariableType::new(dt,is_ptr,false)
+            ),
+            None=> None
+        };
+
+        (func_name, arg_v, vt)
     }
 
-    fn func_stmt(&mut self) -> Box<Expr> {
+    fn func_stmt(&mut self) ->Expr {
 
         /*
          * func test(suu test_args) -> suu {
@@ -249,15 +260,14 @@ impl AST {
                 FuncHeader {
                     name: func_header.0.ident_to_string(),
                     args: func_header.1,
-                    return_type: func_header.2.1,
-                    is_ptr_dt: func_header.2.0
+                    return_type: func_header.2,
                 },
                 body
             )
         )
     }
 
-    fn list(&mut self) -> Box<Expr> {
+    fn list(&mut self) -> Expr {
         let mut data_type = DataType::Unknown;
         let mut l: Vec<Value> = Vec::new();
         while !self.check(TokenType::RightBracket) {
@@ -286,7 +296,7 @@ impl AST {
         )
     }
 
-    fn class_stmt(&mut self) -> Box<Expr> {
+    fn class_stmt(&mut self) -> Expr {
         self.consume(TokenType::Identifier, "Expect class name as identifier");
         let name = self.previous().identifier;
 
@@ -344,7 +354,7 @@ impl AST {
         )
     }
 
-    fn statement(&mut self) -> Box<Expr> {
+    fn statement(&mut self) -> Expr {
 
         if self.match_token(&mut vec![TokenType::LeftBrace]) {
             return self.block();
@@ -367,7 +377,7 @@ impl AST {
         }
     }
 
-    fn return_keyw(&mut self) -> Box<Expr> {
+    fn return_keyw(&mut self) -> Expr {
         // return 3;
         let mut v = None;
         if !self.check(TokenType::Semicolon) {
@@ -382,7 +392,7 @@ impl AST {
             )
     }
 
-    fn extern_func(&mut self) -> Box<Expr> {
+    fn extern_func(&mut self) -> Expr {
         //extern <func_header>;
 
         if self.advance().identifier != "func" {
@@ -401,14 +411,13 @@ impl AST {
             Expr::Extern(FuncHeader {
                 name: func_header.0.ident_to_string(),
                 args: func_header.1,
-                return_type: func_header.2.1,
-                is_ptr_dt: func_header.2.0
+                return_type: func_header.2,
             })
         )
     }
 
 
-    fn if_stmt(&mut self) -> Box<Expr> {
+    fn if_stmt(&mut self) -> Expr {
         let condition = self.expr();
         let then_block = self.statement();
         let mut else_block = Box::new(Expr::None);
@@ -421,7 +430,7 @@ impl AST {
             )
     }
 
-    fn block(&mut self) -> Box<Expr> {
+    fn block(&mut self) -> Expr {
         /*
          * {
          *  int a = 0;
@@ -441,7 +450,7 @@ impl AST {
     }
 
 
-    fn var_decl(&mut self) -> Box<Expr> {
+    fn var_decl(&mut self) -> Expr {
         // char* a = "hello world";
         // let a: const = 3;
 
@@ -497,17 +506,13 @@ impl AST {
             if matches!(data_type, DataType::Unknown) && matches!(*i, Expr::Literal(_)) {
                 let v = i.to_value();
                 if !v.clone().is_null() {
-                    data_type = if v.clone().is_char() { DataType::I8 }
-                            else if v.clone().is_double() {DataType::F64}
-                            else if v.clone().is_float() {DataType::F32}
-                            else if v.clone().is_literal() {DataType::I32}
-                            else {DataType::Unknown}
+                    data_type = v.clone().to_datatype();
                 }
             }
             init = Some(i);
         }
         Box::new(
-            Expr::VarDecl(data_type, is_pointer,is_const, name.ident_to_string(), init)
+            Expr::VarDecl(VariableType::new(data_type,is_pointer,is_const), name.ident_to_string(), init)
             )
     }
 

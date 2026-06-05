@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use crate::{codegen::{llvm::Module, llvm_codegen}, object_out::llvm_object, token::{Token}, AST::{ast_checker::Checker, AST}};
+use crate::{token::{Token}, AST::{ast_checker::Checker, AST}};
 use std::{fs::File, path::Path};
 fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
     let file_path = Path::new(file);
@@ -9,12 +9,16 @@ fn CompileDcz2Executable(file: &str) -> Result<(), Box<dyn std::error::Error>>{
     let ast_tree = p.parse();
 
     let mut c = Checker::new(&ast_tree, file.to_string());
-    let expr = c.check()?;
-    let binding = Module::new(file.to_string());
-    let cg_c = llvm_codegen::LLVMCodegen::compile(expr, &binding);
+    let _expr = c.check()?;
+    /*
+    let cg_c = llvm_codegen::LLVMCodegen::compile(expr, &Context::create(),file);
     cg_c.codegen_all();
     let file= file_path.with_extension("").as_os_str().to_str().unwrap_or("a.out").to_string();
-    llvm_object::LLVMObject::new(cg_c.get_module(), crate::ObjectArch::X64).ir2obj(&file);
+    let llvm_obj = llvm_object::LLVMObject::new(cg_c.get_module(), crate::ObjectArch::X64);
+    llvm_obj.obj2exe(llvm_obj.ir2obj(
+        &file,
+        false
+    ),false,crate::LLDFlavor::WinLink);*/
     Ok(())
 }
 
@@ -171,7 +175,6 @@ mod test {
                     function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "Test".to_string(),
-                        is_ptr_dt: false,
                         return_type: None,
                     }, Box::new(
                         Expr::Block(vec![])
@@ -183,7 +186,6 @@ mod test {
                     function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "Test".to_string(),
-                        is_ptr_dt: false,
                         return_type: None,
                     }, Box::new(
                         Expr::Block(vec![])
@@ -195,7 +197,6 @@ mod test {
                     function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "private_function".to_string(),
-                        is_ptr_dt: false,
                         return_type: None,
                     }, Box::new(
                         Expr::Block(vec![])
@@ -207,7 +208,6 @@ mod test {
                     function: Expr::FuncStmt(FuncHeader {
                         args: vec![],
                         name: "public_function".to_string(),
-                        is_ptr_dt: false,
                         return_type: None,
                     }, Box::new(
                         Expr::Block(vec![])
@@ -219,21 +219,6 @@ mod test {
     #[test]
     fn simple_hello_world_test() {
         CompileDcz2Executable("examples/HelloWorld.dcz").expect("failed to compile program");
-
-        let mut binding = Command::new("gcc");
-        let cmd = binding.args(["examples/HelloWorld.o", "-o", "examples/HelloWorld"]);
-        match cmd.spawn() {
-            Err(e) => {
-                if let std::io::ErrorKind::NotFound = e.kind() {
-                    eprintln!("`ld` was not found! Check your PATH!")
-                } else {
-                    eprintln!("Unknown error occur while linking sample script");
-                }
-                std::process::exit(1);
-            }
-            _ => {}
-        }
-        assert!(cmd.status().expect("cannot get status").success());
         let prog = Command::new("examples/HelloWorld").output().expect("Unable to run program");
         assert_eq!(String::from_utf8(prog.stdout).expect("failed to conv 2 String"), "Hello world!".to_string());
 

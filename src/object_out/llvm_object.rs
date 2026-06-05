@@ -1,8 +1,8 @@
-use std::{ffi::{CStr, CString}, path::PathBuf};
-
+/* 
+use std::{ffi::{CStr, CString, c_char}, path::PathBuf};
 use llvm_sys_201::target_machine::{LLVMOpaqueTargetMachine, LLVMTarget, LLVMTargetRef};
-
-use crate::{codegen::{llvm::Module}, ObjectArch};
+use crate::{LLDFlavor, ObjectArch, codegen::llvm::Module};
+use crate::object_out::lld_port;
 
 pub struct LLVMObject<'llvm> {
     llvm_module: &'llvm Module,
@@ -28,7 +28,6 @@ impl<'llvm> LLVMObject<'llvm> {
             spl[0] =match arch {
                 ObjectArch::X32 => "i386",
                 ObjectArch::X64 => "x86_64",
-                _ => todo!("not implemented yet!")
             };
 
             let triple_name = spl.join("-");
@@ -44,9 +43,6 @@ impl<'llvm> LLVMObject<'llvm> {
                     llvm_sys_201::target::LLVMInitializeX86AsmParser();
                     llvm_sys_201::target::LLVMInitializeX86AsmPrinter();
                 }
-                _ => todo!(
-                    "not implemented or llvm just does not support =)"
-                )
             }
 
 
@@ -71,9 +67,33 @@ impl<'llvm> LLVMObject<'llvm> {
             }
         }
     }
-    pub fn ir2obj(&self, filename: &str) {
-        let mut path = PathBuf::from(filename);
-        path.set_extension("o");
+
+    pub fn obj2exe(&self, filename: String, isVerbose: bool,flavor: LLDFlavor) {
+        let mut link_path = PathBuf::from(filename.as_str());
+        link_path.set_extension("exe");
+        let link_str = String::from(link_path.as_os_str().to_str().unwrap());
+        let win_out_args=format!("/out:{}", link_str);
+        let k = [
+            "lld-link",
+            filename.as_str(),
+            win_out_args.as_str(),
+            "msvcrt.lib"
+        ];
+
+        let c_strings: Vec<CString> = k.iter().map(
+            |&s| CString::new(s).expect("CString::new failed")
+        ).collect();
+
+        let ptr: Vec<*const c_char> = c_strings.iter().map(|cs| cs.as_ptr()).collect();
+        unsafe {
+            println!("LLD Return code: {}",lld_port::LLDMain(
+                k.len() as i32, ptr.as_ptr(), isVerbose, flavor
+            ));
+        }
+    }
+    pub fn ir2obj(&self, filename: &str, isVerbose: bool) -> String {
+        let path = PathBuf::from(filename);
+        let obj_fn =path.as_os_str().to_str().unwrap();
 
         let mut uninit_ptr =std::mem::MaybeUninit::zeroed();
         unsafe {
@@ -81,12 +101,16 @@ impl<'llvm> LLVMObject<'llvm> {
             let is_ok = llvm_sys_201::target_machine::LLVMTargetMachineEmitToFile(
                 self.target_machine,
                 self.llvm_module.module,
-                CString::new(path.as_os_str().to_str().unwrap()).expect("cstring failed").as_ptr(),
+                CString::new(obj_fn).expect("cstring failed").as_ptr(),
                 llvm_sys_201::target_machine::LLVMCodeGenFileType::LLVMObjectFile,
                 &mut err
             );
-            println!("isok: {:?}", is_ok);
-            println!("e: {:?}", CStr::from_ptr(err).to_string_lossy().to_string());
+            if isVerbose{
+                println!("isok: {:?}", is_ok);
+                println!("e: {:?}", CStr::from_ptr(err).to_string_lossy().to_string());
+            }
         }
+        String::from(obj_fn)
     }
 }
+    */
