@@ -13,11 +13,39 @@ pub enum Value {
     Boolean(bool),
     List(Vec<Value>)
 }
-#[derive(Debug,Clone,PartialEq)]
+#[derive(Clone,PartialEq)]
 pub struct TypedValue {
     pub val: Value,
     pub val_type: DataType,
     pub is_ptr: bool
+}
+
+impl std::fmt::Display for TypedValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"({:?}{}){}", self.val_type, self.is_ptr.then(||"*").unwrap_or(""),self.val)
+    }
+}
+
+impl std::fmt::Debug for TypedValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl std::fmt::Display for Value {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let format = match self {
+            Value::Null => "null",
+            Value::Integer(i) => &i.to_string(),
+            Value::Real(r) => &r.to_string(),
+            Value::Str(s) => &format!("\"{}\"", s),
+            Value::Object(o_name) => &format!("Obj({})", o_name),
+            Value::Char(c) => &format!("'{}'",c),
+            Value::Boolean(b) => &format!("{}", if *b { "true" } else { "false" }),
+            Value::List(_) => todo!(),
+        };
+        write!(f,"{}", format)
+    }
 }
 
 impl TypedValue {
@@ -69,7 +97,7 @@ impl TypedValue {
                 }
             ),
             DataType::U32 => Value::Integer(
-                
+
                 match self.val.clone() {
                     Value::Integer(n) => n as i128 & u32::MAX as i128,
                     Value::Real(n) => n as i128 & u32::MAX as i128,
@@ -77,7 +105,7 @@ impl TypedValue {
                 }
             ),
             DataType::U64 => Value::Integer(
-                
+
                 match self.val.clone() {
                     Value::Integer(n) => n as i128 & u64::MAX as i128,
                     Value::Real(n) => n as i128 & u64::MAX as i128,
@@ -99,7 +127,7 @@ impl TypedValue {
                 }
             ),
             DataType::Void => unimplemented!("void cannot be cast to anything!"),
-            DataType::Unknown => todo!(),
+            _ => unimplemented!(),
         };
         Ok(())
     }
@@ -187,7 +215,7 @@ impl std::ops::Shl for Value {
             return Err("[SHL] Cannot shl on non-integer value".to_string());
         };
 
-        if lhs_n < 0 || rhs_n<0 { 
+        if lhs_n < 0 || rhs_n<0 {
             Err("[SHL] value must be natural number".to_string())
         } else {
             Ok(Value::Integer(lhs_n<<rhs_n))
@@ -201,7 +229,7 @@ impl std::ops::BitOr for Value {
             return Err("[BITOR] Cannot 'or' on non-integer value".to_string());
         };
 
-        if lhs_n < 0 || rhs_n<0 { 
+        if lhs_n < 0 || rhs_n<0 {
             Err("[BITOR] value must be natural number".to_string())
         } else {
             Ok(Value::Integer(lhs_n|rhs_n))
@@ -216,7 +244,7 @@ impl std::ops::BitAnd for Value {
             return Err("[BITAND] Cannot 'and' on non-integer value".to_string());
         };
 
-        if lhs_n < 0 || rhs_n<0 { 
+        if lhs_n < 0 || rhs_n<0 {
             Err("[BITAND] value must be natural number".to_string())
         } else {
             Ok(Value::Integer(lhs_n&rhs_n))
@@ -230,7 +258,7 @@ impl std::ops::BitXor for Value {
             return Err("[BITXOR] Cannot 'xor' on non-integer value".to_string());
         };
 
-        if lhs_n < 0 || rhs_n<0 { 
+        if lhs_n < 0 || rhs_n<0 {
             Err("[BITXOR] value must be natural number".to_string())
         } else {
             Ok(Value::Integer(lhs_n^rhs_n))
@@ -245,7 +273,7 @@ impl std::ops::Shr for Value {
             return Err("[SHR] Cannot shl on non-integer value".to_string());
         };
 
-        if lhs_n < 0 || rhs_n<0 { 
+        if lhs_n < 0 || rhs_n<0 {
             Err("[SHR] value must be natural number".to_string())
         } else {
             Ok(Value::Integer(lhs_n>>rhs_n))
@@ -306,9 +334,9 @@ impl Value {
     pub fn new(string: String) -> Self {
         // convert string to specified value
         let mut strtrim = string.trim();
-        let radix = if strtrim.starts_with("0x") { 
-            16 
-        } 
+        let radix = if strtrim.starts_with("0x") {
+            16
+        }
         else if strtrim.starts_with("0b") {2}
         else if strtrim.starts_with("0o") {8}
         else {10};
@@ -333,26 +361,6 @@ impl Value {
                 Self::Str(strtrim.to_string())
             }
         }
-    }
-
-    pub fn is_integer(self) -> bool {
-        matches!(self, Value::Integer(_))
-    }
-
-    pub fn is_real(self) -> bool {
-        matches!(self, Value::Real(_))
-    }
-
-    pub fn is_char(self) -> bool {
-        matches!(self, Value::Char(_))
-    }
-
-    pub fn is_string(self) -> bool {
-        matches!(self, Value::Str(_))
-    }
-    
-    pub fn is_null(self) -> bool {
-        matches!(self, Value::Null)
     }
 
     pub fn to_datatype(self) -> DataType {

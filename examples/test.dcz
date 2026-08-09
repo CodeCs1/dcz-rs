@@ -1,5 +1,5 @@
-func main() -> i32 {
-    let k = 3;
-    k;
-    return 0;
+{
+    const k: i32 = 4;
+    let a = k + 3;
+    a;
 }

@@ -3,7 +3,7 @@ use inkwell::{
     builder::Builder, context::Context, module::Module, support::LLVMString, types::{BasicTypeEnum, FloatType, FunctionType, IntType, VoidType}, values::{BasicValue, PointerValue}
 };
 
-use crate::AST::expr_node::{DataType, Expr, VariableType};
+use crate::AST::expr_node::{DataType, Expr, VariableType,ExprType};
 
 pub struct LLVMCodegen<'llvm> {
     exprs: Vec<Expr>,
@@ -90,8 +90,8 @@ impl<'llvm> LLVMCodegen<'llvm> {
     }
 
     pub fn codegen(&self, e: &Expr, variable: &mut Vec<VariableLLVM<'llvm>>) -> Option<Box<dyn BasicValue<'llvm> + 'llvm>> {
-        match e {
-            Expr::Literal(v) => {
+        match e.clone().get_expr_type().and_then(|f| Some(*f)).unwrap_or(ExprType::None) {
+            ExprType::Literal(v) => {
                 let inkwell_value = self.add_data_type(v.val_type.clone());
                 match v.val_type {
                     DataType::I8 | DataType::I16 | DataType::I32 | DataType::I64 => Some(Box::new(
@@ -112,8 +112,8 @@ impl<'llvm> LLVMCodegen<'llvm> {
                     _ => None
                 }
             }
-            Expr::Return(v) => {
-                let ret_val = v.as_deref();
+            ExprType::Return(v) => {
+                let ret_val = &v;
                 let k = match ret_val {
                     Some(v) => self.codegen(v,variable),
                     None => None,
@@ -123,14 +123,10 @@ impl<'llvm> LLVMCodegen<'llvm> {
                     .ok()?;
                 None
             }
-            Expr::Block(blocks) => {
-                for e in blocks {
-                    println!("{:#?}", variable);
-                    self.codegen(e,variable);
-                }
+            ExprType::Block(blocks) => {
                 None
             }
-            Expr::FuncStmt(fh, _body) => {
+            ExprType::FuncStmt(fh, _body) => {
                 let fn_type = match fh.return_type.clone() {
                     Some(vt) => self.variable_type_to_function_type(vt),
                     None => self
@@ -139,11 +135,11 @@ impl<'llvm> LLVMCodegen<'llvm> {
                 let f = self.module.add_function(&fh.name, fn_type, None);
                 let basic_block = self.cont.append_basic_block(f, "entry");
                 self.builder.position_at_end(basic_block);
-                self.codegen(_body,variable);
+                //self.codegen(_body,variable);
                 None
             },
-            Expr::Var(k) => {
-                match variable.iter().find(|&f| return &f.get_name() == k) {
+            ExprType::Var(k) => {
+                match variable.iter().find(|&f| return f.get_name() == k) {
                     Some(v) => {
                         self.builder.build_load(
                             v.ty,
@@ -155,19 +151,16 @@ impl<'llvm> LLVMCodegen<'llvm> {
                 }
                 None
             },
-            Expr::VarDecl(vt, name, init) => {
-                let basic_type = self
-                    .add_data_type(vt.clone().get_datatype())
-                    .get_basic_type()?;
-                let ptr = self.builder.build_alloca(basic_type, name).ok()?;
-                let val = self.codegen(init.clone().unwrap().as_mut(),variable)?;
-                self.builder
-                    .build_store(ptr, val.as_basic_value_enum())
-                    .ok()?;
-                variable.push(VariableLLVM::new(name.clone(),ptr,basic_type));
+            ExprType::VarDecl(_) => {
+                // let ptr = self.builder.build_alloca(basic_type, name).ok()?;
+                // let val = self.codegen(init.clone().unwrap().as_mut(),variable)?;
+                // self.builder
+                //     .build_store(ptr, val.as_basic_value_enum())
+                //     .ok()?;
+                // variable.push(VariableLLVM::new(name.clone(),ptr,basic_type));
                 None
             }
-            Expr::Cast(_n, _e) => None,
+            ExprType::Cast(_n, _e) => None,
             o => unimplemented!("Expr not implemented: {:?}", o),
         }
     }

@@ -1,10 +1,12 @@
 #![allow(non_snake_case)]
 
-use std::{fs::File, path::{Path, PathBuf}};
+use std::{fs::File, panic, path::{Path, PathBuf}};
 use clap::Parser;
 use inkwell::context::Context;
 use token::Token;
 use AST::{AST as dcz_ast, ast_checker::Checker};
+
+use crate::MessageHandler::throw_message;
 
 //mod object_out;
 mod AST;
@@ -77,25 +79,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     }
 
     let file_path = Path::new(args.file.as_str());
-    let _out_file = if args.OutputFile.is_empty() {
-        let mut fp = PathBuf::from(&args.file);
-        fp.set_extension("exe");
-        String::from(fp.as_os_str().to_str().unwrap())
-    } else {
-        args.OutputFile
-    };
+    // let _out_file = if args.OutputFile.is_empty() {
+    //     let mut fp = PathBuf::from(&args.file);
+    //     fp.set_extension("exe");
+    //     String::from(fp.as_os_str().to_str().unwrap())
+    // } else {
+    //     args.OutputFile
+    // };
 
     let file_io=File::open(file_path)?;
     let t = Token::FromIO(file_path,file_io);
     let mut p=dcz_ast::new(t?.tokenize());
-    let ast_tree = p.parse();
+    let ast_tree = p.parse()?;
 
     let mut c = Checker::new(
         &ast_tree,
         file_path.to_str().unwrap_or("source").to_string()
     );
     let expr = c.check()?;
-    
+
     if args.ShowAST {
         println!("{:#?}", expr);
         return Ok(())

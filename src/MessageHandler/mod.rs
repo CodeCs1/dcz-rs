@@ -25,13 +25,13 @@ impl Display for MessageType {
     }
 }
 
-pub fn throw_message(source_name: &str,message_type: MessageType, line: usize, pos:usize, message: &str) {
-    eprintln!("{}: {}\nat {}", message_type, message, format!("{}:{}:{}", source_name,line,pos).bold())
+pub fn throw_message<T: std::fmt::Display>(source_name: &str,message_type: MessageType, line: usize, pos:usize, message: T) -> String {
+    format!("{}: {}\nat {}", message_type, message, format!("{}:{}:{}", source_name,line,pos).bold())
 }
 
 #[macro_export]
 macro_rules! panic_error {
-    ($source: expr_2021, $line: expr_2021, $pos: expr_2021, $message: expr_2021) => {
+    ($source: expr, $line: expr, $pos: expr, $message: expr) => {
         throw_message($source, MessageType::Error, $line, $pos, $message);
         exit(1)
     };

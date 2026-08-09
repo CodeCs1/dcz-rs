@@ -1,100 +1,78 @@
-use std::{collections::HashMap, ops::{Deref, Index, IndexMut}};
-use crate::AST::expr_node::{Variable};
-
+use std::{collections::HashMap, marker::PhantomData};
+use crate::AST::expr_node::Variable;
 type VarList = HashMap<String, Variable>;
-type VariableResult<'env> = Result<&'env Variable,String>;
-#[derive(Clone,Debug)]
-pub struct VarEnvironment{
-    last_save: Option<Box<VarEnvironment>>,
-    enclosing: Option<Box<VarEnvironment>>,
-    variables: VarList,
+
+#[derive(Debug,Clone)]
+pub struct VariableTable<'a> {
+    parent: Option< Box< VariableTable<'a> > >,
+    vars: VarList,
+    _phantomdata: PhantomData<&'a VariableTable<'a>>
 }
 
-impl VarEnvironment {
+impl<'a> VariableTable<'a> {
+    pub fn new(parent: Option<Box<VariableTable<'a>>> ) -> Self {
+        Self {
+            parent,
+            vars: HashMap::new(),
+            _phantomdata: PhantomData
+        }
+    }
+    pub fn find(&mut self, vars_name: &String) -> Option<Variable> {
+        let Some(var) = self.vars.iter().find(|v| v.0 == vars_name).and_then(|(_,o)| Some(o.clone())) else {
+            let Some(parent) = &mut self.parent else {
+                return None;
+            };
+            return parent.clone().find(vars_name);
+        };
+        Some(var)
+
+    }
+    pub fn add_new_var(&mut self, var: &Variable) {
+        self.vars.insert(var.name.to_owned(), var.clone());
+    }
+}
+
+#[derive(Clone,Debug)]
+pub struct VariableSymbolTableRoot<'a> {
+    global: VariableTable<'a>,
+    current_table: Option<VariableTable<'a>>
+}
+
+impl <'a> VariableSymbolTableRoot<'a> {
     pub fn new() -> Self {
         Self {
-            last_save: None,
-            enclosing: None,
-            variables: VarList::new()
+            global: VariableTable::new(None),
+            current_table: None
         }
     }
-    pub fn new_with_enclosing(enclosing: VarEnvironment) -> Self {
-        Self { enclosing: Some(
-            Box::new(enclosing)
-        ), variables: VarList::new(),
-            last_save: None
-        }
+    pub fn find(&mut self, vars_name: &String) -> Option<Variable> {
+        self.local_or_global().find(vars_name)
     }
-    pub fn save(&mut self) {
-        if self.last_save.is_none() {
-            self.last_save = Some(
-                Box::new(Self {
-                    enclosing: self.enclosing.clone(),
-                    last_save: self.last_save.clone(),
-                    variables: self.variables.clone()
-                })
-            );
-        }
+
+    pub fn add_vars(&mut self, vars: Variable) {
+        self.local_or_global().add_new_var(&vars);
     }
-    pub fn load(&mut self,new_varenv: VarEnvironment) {
-        self.last_save = Some(Box::new(self.deref().clone()));
-        self.enclosing = new_varenv.enclosing;
-        self.variables = new_varenv.variables;
+    fn local_or_global(&mut self) -> &mut VariableTable<'a> {
+        let Some(current_table) = self.current_table.as_mut() else {
+            return &mut self.global
+        };
+        current_table
     }
-    pub fn load_last(&mut self) {
-        let Some(last_env) = self.last_save.clone() else {
+    pub fn clear_local_table(&mut self) {
+        let Some(current_table) = self.current_table.as_mut() else {
             return;
         };
-        self.enclosing = last_env.enclosing;
-        self.last_save = None;
-        self.variables = last_env.variables;
-    }
-    pub fn get(&self, name: &str) -> VariableResult<'_>{
-        let Some(v) = self.variables.get(name) else {
-            return Err(format!("Variable '{}' not defined",name));
+        let Some(parents) = current_table.parent.as_mut() else {
+            self.current_table = None;
+            return;
         };
-        if let Some(varenv) = &self.enclosing {
-            return varenv.get(name);
-        }
-        Ok(v)
+        *current_table = *parents.clone();
     }
-    pub fn contains(&self, name: &String) -> bool {
-        return self.variables.contains_key(name)
-    }
-    pub fn new_value(&mut self, name: String, val: Variable) {
-        self.variables.insert(name, val);
-    }
-    pub fn get_mut(&mut self, name: &str) -> Result<&mut Variable,String> {
-        let Some(var) = self.variables.get_mut(name) else {
-            return Err(format!("Undefined variable '{}'", name));
-        };
-        Ok(var)
-    }
-    // /// Return error as Some of String
-    // pub fn assign(&mut self, name: &str, val: Variable) -> Option<String> {
-    //     let Ok(var) =self.get_mut("") else {
-    //         return Some(format!("Undefined variable '{}'", name))
-    //     };
-    //     *var = val;
-    //     None
-    // }
-}
-
-impl Index<&str> for VarEnvironment {
-    type Output = Variable;
-    fn index(&self, index: &str) -> &Self::Output {
-        let Ok(v) = self.get(index) else {
-            panic!("Variable '{}' not exist",index);
-        };
-        v
-    } 
-}
-
-impl IndexMut<&str> for VarEnvironment {
-    fn index_mut(&mut self, index: &str) -> &mut Self::Output {
-        let Ok(v) = self.get_mut(index) else {
-            panic!("Variable '{}' not exist", index);
-        };
-        v
+    pub fn add_local_table(&mut self) {
+        self.current_table = Some(
+            VariableTable::new(
+                Some(Box::new(self.local_or_global().clone()))
+            )
+        )
     }
 }

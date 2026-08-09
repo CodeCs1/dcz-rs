@@ -18,7 +18,8 @@ pub enum DataType {
     F32,
     F64,
     Void,
-    Unknown,
+    CustomType(String),
+    Unknown
 }
 
 impl DataType {
@@ -33,52 +34,62 @@ impl DataType {
     }
 }
 
+impl From<String> for DataType {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "i8"   => DataType::I8,
+            "i16"  => DataType::I16,
+            "i32"  => DataType::I32,
+            "i64"  => DataType::I64,
+            "u8"   => DataType::U8,
+            "u16"  => DataType::U16,
+            "u32"  => DataType::U32,
+            "u64"  => DataType::U64,
+            "f32"  => DataType::F32,
+            "f64"  => DataType::F64,
+            "void" => DataType::Void,
+            ""     => DataType::Unknown,
+            _  => DataType::CustomType(value)
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Variable {
-    pub vData: VariableType,
+    pub vData: Option<VariableType>,
     pub name: String,
     pub init: Option<Expr>,
-    pub is_used: bool,
 }
 
 impl Variable {
-    pub fn new(vData: VariableType, name: String, init: Option<Expr>, is_used: bool) -> Self {
+    pub fn new(vData: Option<VariableType>, name: String, init: Option<Expr>) -> Self {
         // try to guess data type from init value
-        println!("{}", vData);
-        let mut vData_new = vData;
-
-        if init.is_some() {
-            //let expr = init.clone().unwrap();
-            // match expr {
-            //     Expr::Literal(v) => {
-            //         vData_new=match vData_new {
-            //             VariableType::Constant(_) => VariableType::Constant(v.val_type),
-            //             VariableType::NonPointer(_) => VariableType::NonPointer(v.val_type),
-            //             VariableType::Pointer(_) => VariableType::Pointer(v.val_type)
-            //         }
-            //     }
-            //     _ => {}
-            // }
-        }
 
         Self {
-            vData: vData_new,
+            vData: vData,
             name,
             init,
-            is_used,
         }
     }
     pub fn is_constant(self) -> bool {
-        self.vData.is_constant()
+        let Some(vdata) = self.vData else { return false };
+        vdata.is_constant()
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct FuncHeader {
     pub name: String,
     pub args: Vec<Variable>,
     pub return_type: Option<VariableType>,
 }
+
+impl std::fmt::Debug for FuncHeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}({:?}) -> {:?}", self.name, self.args, self.return_type)
+    }
+}
+
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AccessLevel {
@@ -176,17 +187,17 @@ pub enum ExprType {
     Identifier(String),
     Var(String),
     Statement(Expr),
-    Block(Expr),
+    Block(Vec<Expr>),
     Assign(String, Expr),
 
-    IfStmt(Expr, Expr, Expr),
+    IfStmt(Expr, Expr, Option<Expr>),
     WhileStmt(Expr, Expr),
     /// FuncStmt(name, args, body, return_type)
     FuncStmt(FuncHeader, Expr),
     Callee(Expr, Vec<Expr>),
 
     /// Var declare Statement VarDecl(dt, is_pointer, is_constant, name, initializer)
-    VarDecl(VariableType, String, Option<Expr>),
+    VarDecl(Variable),
     List(Vec<Value::Value>),
     Return(Option<Expr>),
 
@@ -201,11 +212,11 @@ pub enum ExprType {
     None,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Expr {
     expr_type: Box<ExprType>,
-    line: usize,
-    at: usize,
+    pub line: usize,
+    pub at: usize,
 }
 
 pub enum TerminalType {
@@ -217,6 +228,10 @@ pub enum TerminalType {
 impl Expr {
     pub fn new(expr_type:ExprType, line: usize, at: usize) -> Self {
         Self { expr_type:Box::new(expr_type), line, at }
+    }
+    pub fn get_expr_type(self) -> Option<Box<ExprType>> {
+        if matches!(*self.expr_type, ExprType::None) { None }
+        else { Some(self.expr_type) }
     }
     pub fn new_group(inner_expr: Expr) -> Self {
         Self {
@@ -249,10 +264,10 @@ impl Expr {
     pub fn new_unary(op: TokenData, expr: Expr) -> Self {
         Self { expr_type: Box::new(
             ExprType::Unary(
-                op.clone(), 
+                op.clone(),
                 expr
             )
-        ), line: op.line, at: op.start 
+        ), line: op.line, at: op.start
         }
     }
     pub fn new_binary(lhs: Expr, op: TokenData, rhs: Expr) -> Self {
@@ -266,6 +281,49 @@ impl Expr {
             at
         }
     }
+    pub fn function(self) -> Option<(FuncHeader, Expr)> {
+        let ExprType::FuncStmt(func_header, body) = *self.expr_type else { return None };
+        Some((func_header, body))
+
+    }
+    pub fn identifier(self) -> Option<String> {
+        let ExprType::Identifier(s) = *self.expr_type else { return None };
+        Some(s)
+    }
+
+    pub fn literal(self) -> Option<TypedValue> {
+        let ExprType::Literal(s) = *self.expr_type else {return None};
+        Some(s)
+    }
+
+    pub fn var(self) -> Option<String> {
+        let ExprType::Var(v) = *self.expr_type else {return None };
+        Some(v)
+    }
+    pub fn if_vaild_then<F>(self, mut f: F)
+        where F: FnMut(Expr){
+            if !matches!(*self.expr_type,ExprType::None) {
+                f(self);
+            }
+    }
+    pub fn if_vaild_then_pass<F, T>(self, mut f: F, pass_what: T)
+        where F: FnMut(T){
+            if !matches!(*self.expr_type,ExprType::None) {
+                f(pass_what);
+            }
+    }
+}
+
+impl std::fmt::Display for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f,"{:?}",*self.expr_type)
+    }
+}
+
+impl std::fmt::Debug for Expr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"[{}:{}]:{:?}", self.line,self.at,*self.expr_type)
+    }
 }
 
 impl Default for Expr {
@@ -277,136 +335,3 @@ impl Default for Expr {
         }
     }
 }
-
-// impl ExprType {
-//     pub fn visit(&mut self) -> Result<ExprType, String> {
-//         match self {
-//             ExprType::Literal(_) => Ok(self.clone()),
-//             ExprType::Macro(_, _) => Ok(ExprType::None),
-//             ExprType::Grouping(expr) => expr.visit().clone(),
-//             ExprType::Binary(lhs, op, rhs) => {
-//                 let lhs = lhs.visit()?;
-//                 let rhs = rhs.visit()?;
-
-//                 let result = if let Expr::Literal(lhs_val) = lhs.clone() && let Expr::Literal(rhs_val) = rhs.clone() {
-//                     let v = match op.tok_type {
-//                         crate::token::token_type::TokenType::Plus => {
-//                             lhs_val.val+rhs_val.val
-//                         }
-//                         crate::token::token_type::TokenType::Minus => {
-//                             lhs_val.val-rhs_val.val
-//                         }
-//                         crate::token::token_type::TokenType::Star => {
-//                             lhs_val.val*rhs_val.val
-//                         }
-//                         crate::token::token_type::TokenType::Slash => {
-//                             lhs_val.val/rhs_val.val
-//                         }
-//                         crate::token::token_type::TokenType::Less => {
-//                             Ok(Value::Value::Boolean(lhs_val.val<rhs_val.val))
-//                         }
-//                         crate::token::token_type::TokenType::LessEqual => {
-//                             Ok(Value::Value::Boolean(lhs_val.val<=rhs_val.val))
-//                         }
-//                         crate::token::token_type::TokenType::GreaterEqual => {
-//                             Ok(Value::Value::Boolean(lhs_val.val>=rhs_val.val))
-//                         }
-//                         crate::token::token_type::TokenType::EqualEqual => {
-//                             Ok(Value::Value::Boolean(lhs_val.val==rhs_val.val))
-//                         }
-//                         crate::token::token_type::TokenType::ShiftLeft => {
-//                             lhs_val.val<<rhs_val.val
-//                         }
-//                         crate::token::token_type::TokenType::ShiftRight => {
-//                             lhs_val.val>>rhs_val.val
-//                         }
-//                         crate::token::token_type::TokenType::Or => lhs_val.val|rhs_val.val,
-//                         crate::token::token_type::TokenType::And => lhs_val.val & rhs_val.val,
-//                         _ => {
-//                             unimplemented!()
-//                         }
-//                     }?;
-//                     Ok(Expr::Literal(TypedValue::new(v,false)))
-//                 } else {
-//                     Ok(Expr::Binary(Box::new(lhs), op.clone(), Box::new(rhs)))
-//                 };
-
-//                 result
-//             }
-//             Expr::Unary(op, rhs) => {
-//                 let rhs = rhs.visit()?;
-//                 if let Expr::Literal(lit) = rhs {
-//                     let v = match op.tok_type {
-//                         crate::token::token_type::TokenType::Minus => -lit.val,
-//                         crate::token::token_type::TokenType::Not => !lit.val,
-//                         _ => unimplemented!(),
-//                     }?;
-//                     Ok(Expr::Literal(TypedValue::new(v,false)))
-//                 } else {
-//                     Ok(self.clone())
-//                 }
-//             }
-//             Expr::VarDecl(_, _, _) => Ok(Expr::None),
-//             Expr::Statement(st) => st.visit(),
-//             Expr::Cast(_, _) |Expr::Var(_) | Expr::Callee(_, _) => Ok(self.clone()),
-//             o => todo!("Expr visit does not implement {:?} yet ", o),
-//         }
-//     }
-//     pub fn to_value(&self) -> Value::Value {
-//         match self {
-//             Expr::Literal(v) => v.clone().val,
-//             Expr::List(l) => Value::Value::List(l.to_vec()),
-//             _ => Value::Value::Null,
-//         }
-//     }
-//     pub fn ident_to_string(&self) -> String {
-//         match self {
-//             Expr::Identifier(s) => s.clone(),
-//             Expr::Var(s) => s.clone(),
-//             _ => "".to_string(),
-//         }
-//     }
-//     pub fn get_function(&self) -> (String, Vec<Variable>, Box<Expr>, Option<VariableType>) {
-//         match self {
-//             Expr::FuncStmt(func_header, body) => (
-//                 func_header.name.clone(),
-//                 func_header.args.clone(),
-//                 body.clone(),
-//                 func_header.return_type.clone(),
-//             ),
-//             Expr::Extern(f) => (
-//                 f.name.clone(),
-//                 f.args.clone(),
-//                 Box::new(Expr::None),
-//                 f.return_type.clone(),
-//             ),
-//             e => unimplemented!("{:?}", e),
-//         }
-//     }
-
-//     pub fn to_datatype(&self) -> Result<DataType, String> {
-//         match self {
-//             Expr::Identifier(n) => match n.as_str() {
-//                 "i8" => Ok(DataType::I8),
-//                 "i16" => Ok(DataType::I16),
-//                 "i32" => Ok(DataType::I32),
-//                 "i64" => Ok(DataType::I64),
-
-//                 "u8" => Ok(DataType::U8),
-//                 "u16" => Ok(DataType::U16),
-//                 "u32" => Ok(DataType::U32),
-//                 "u64" => Ok(DataType::U64),
-
-//                 "f32" => Ok(DataType::F32),
-//                 "f64" => Ok(DataType::F64),
-//                 "void" => Ok(DataType::Void),
-//                 _ => Ok(DataType::Unknown),
-//             },
-//             Expr::Literal(v) => Ok(v.clone().val_type),
-//             _ => Err(format!(
-//                 "Expr type expect to be identifier, got {:#?}",
-//                 self
-//             )),
-//         }
-//     }
-// }
