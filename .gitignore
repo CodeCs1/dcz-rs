@@ -2,6 +2,5 @@ target
 gitpush.sh
 *.o
 Cargo.lock
-test
 *.kate*
 .vscode
